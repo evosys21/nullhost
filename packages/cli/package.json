@@ -1,0 +1,12 @@
+{
+  "name": "@nullhost/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "nullhost": "./src/main.ts"
+  },
+  "dependencies": {
+    "@nullhost/core": "workspace:*"
+  }
+}

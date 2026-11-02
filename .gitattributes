@@ -1,0 +1,7 @@
+# LF in the repository and in working copies, whatever wrote the file.
+* text=auto eol=lf
+
+# binaries
+*.png binary
+*.ico binary
+*.woff2 binary

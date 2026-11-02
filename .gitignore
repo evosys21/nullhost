@@ -1,0 +1,12 @@
+node_modules/
+.yarn/*
+!.yarn/releases
+!.yarn/plugins
+.pnp.*
+*.log
+*.tsbuildinfo
+dist/
+out/
+
+# local copy of the hosts file + data for trying the app (holds private host names)
+.dev/

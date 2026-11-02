@@ -1,0 +1,36 @@
+{
+  "name": "@nullhost/desktop",
+  "productName": "NullHost",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NullHost desktop app (Electron + Vue)",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "dev:web": "vite --config web.vite.config.ts",
+    "smoke": "electron-vite build && electron . --smoke",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json",
+    "icon": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/make-icon.mts",
+    "dist": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/make-icon.mts && electron-vite build && electron-builder --win --x64 --publish never",
+    "dist:dir": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/make-icon.mts && electron-vite build && electron-builder --win --x64 --dir --publish never"
+  },
+  "devDependencies": {
+    "@codemirror/language": "^6.11.3",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/view": "^6.38.0",
+    "@lezer/highlight": "^1.2.5",
+    "@nullhost/core": "workspace:*",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "codemirror": "^6.0.2",
+    "electron": "38.8.6",
+    "electron-builder": "^26.0.12",
+    "electron-vite": "^4.0.1",
+    "vite": "^7.1.7",
+    "vue": "^3.5.22",
+    "vue-tsc": "^3.1.0"
+  },
+  "author": "Andrei Bintintan",
+  "homepage": "https://github.com/evosys21/nullhost"
+}

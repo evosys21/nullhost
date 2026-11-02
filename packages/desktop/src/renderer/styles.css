@@ -1,0 +1,191 @@
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --border: #e3e6ea;
+  --border-strong: #d5d9df;
+  --row: #eef0f3;
+  --hover: #f0f2f5;
+  --text: #1a1d21;
+  --text-2: #3a414b;
+  --muted: #5b6470;
+  --faint: #9aa1ab;
+  --accent: #2457d6;
+  --accent-hover: #1a43a8;
+  --accent-soft: #e8eefc;
+  --accent-border: #c7d4f7;
+  --accent-strong: #1a43a8;
+  --on-accent: #ffffff;
+  --ok: #15803d;
+  --ok-soft: #dcfce7;
+  --ok-text: #14532d;
+  --warn: #b45309;
+  --warn-soft: #fef3c7;
+  --warn-text: #7c3a05;
+  --warn-card: #fffbeb;
+  --warn-border: #f5d48a;
+  --pause: #1d4ed8;
+  --pause-soft: #dbeafe;
+  --danger: #991b1b;
+  --danger-soft: #fee2e2;
+  --danger-border: #fca5a5;
+  --track: #a3a9b3;
+  --knob: #ffffff;
+  --toast: #1a1d21;
+  --toast-text: #ffffff;
+  --selection: #d7e1fb;
+  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --mono: "Cascadia Mono", "Cascadia Code", Consolas, monospace;
+  color-scheme: light;
+}
+
+/* Electron answers this from nativeTheme.themeSource: Settings › Appearance, or Windows' app mode */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101317;
+    --surface: #181c22;
+    --border: #282e36;
+    --border-strong: #363e48;
+    --row: #20252c;
+    --hover: #232931;
+    --text: #e6e9ed;
+    --text-2: #c3c9d1;
+    --muted: #98a1ad;
+    --faint: #6a7280;
+    --accent: #4d7ff2;
+    --accent-hover: #9ab8ff;
+    --accent-soft: #1b2741;
+    --accent-border: #2f4373;
+    --accent-strong: #3466d8;
+    --ok: #3fbf6c;
+    --ok-soft: #13301f;
+    --ok-text: #8ee6ab;
+    --warn: #f0a33a;
+    --warn-soft: #362812;
+    --warn-text: #fcd38a;
+    --warn-card: #221b0f;
+    --warn-border: #5a4316;
+    --pause: #7ea4ff;
+    --pause-soft: #1a2748;
+    --danger: #f87f7f;
+    --danger-soft: #3a1919;
+    --danger-border: #6e2b2b;
+    --track: #4a525d;
+    --toast: #e6e9ed;
+    --toast-text: #101317;
+    --selection: #2a3d66;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); font-family: var(--font); font-size: 14px; color: var(--text); }
+a { color: var(--accent); }
+a:hover { color: var(--accent-hover); }
+button, input, select, textarea { font: inherit; color: inherit; }
+.mono { font-family: var(--mono); font-size: 13px; }
+.muted { color: var(--muted); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* shell: the window never scrolls. Every page is a fixed header over its own
+   scrolling .content, and both keep a scrollbar's width free on the right
+   (scrollbar-gutter), so buttons and cards sit in the same place on every page
+   whether or not that page scrolls. */
+.shell { display: flex; height: 100vh; overflow: hidden; }
+.sidebar { flex: 0 0 220px; display: flex; flex-direction: column; gap: 4px; background: var(--surface); border-right: 1px solid var(--border); padding: 16px 12px; height: 100%; box-sizing: border-box; overflow-y: auto; }
+.brand { display: flex; align-items: center; gap: 10px; padding: 6px 10px 18px; }
+.brand-name { font-weight: 700; font-size: 16px; }
+.brand-sub { font-size: 11px; color: var(--muted); }
+.nav { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; font-size: 14px; font-weight: 500; color: var(--text-2); text-decoration: none; min-height: 44px; border: 0; background: none; width: 100%; text-align: left; cursor: pointer; }
+.nav:hover { background: var(--hover); color: var(--text); }
+.nav.active { background: var(--accent-soft); color: var(--accent-hover); }
+.nav svg { width: 18px; height: 18px; flex: 0 0 18px; }
+.pill { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: 0 0 8px; }
+.main { flex: 1 1 auto; min-width: 0; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+/* one height for every page: the title on the buttons' line (40 px), then up to
+   two subtitle lines; the title is in the same place whether a subtitle is there or not */
+.header { flex: 0 0 88px; box-sizing: border-box; display: flex; align-items: flex-start; gap: 12px; padding: 14px 28px 0; background: var(--surface); border-bottom: 1px solid var(--border); overflow: hidden; scrollbar-gutter: stable; }
+.header h1 { margin: 0; font-size: 20px; font-weight: 600; line-height: 40px; }
+.header .title { flex: 1 1 auto; min-width: 0; }
+.header > :not(.title) { flex: 0 0 auto; white-space: nowrap; }
+.header .sub { font-size: 13px; line-height: 16px; color: var(--muted); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.header .sub + .sub, .header .sub:has(+ .sub) { -webkit-line-clamp: 1; }
+/* position: relative keeps absolutely placed helpers (.sr-only) inside the scroll area */
+.content { position: relative; flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-gutter: stable; padding: 20px 28px 40px; display: flex; flex-direction: column; gap: 16px; }
+.content > * { flex-shrink: 0; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.span2 { grid-column: span 2; }
+
+/* controls */
+.btn { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface); font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.btn:hover:not(:disabled) { background: var(--hover); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.primary:hover:not(:disabled) { background: var(--accent-strong); }
+.btn.sm { min-height: 34px; padding: 0 10px; font-size: 13px; }
+.btn.danger { color: var(--danger); border-color: var(--danger-border); }
+.btn svg { width: 16px; height: 16px; }
+.switch { display: inline-flex; align-items: center; gap: 10px; border: 0; background: none; padding: 0; cursor: pointer; }
+.switch:disabled { cursor: default; opacity: 0.5; }
+.track { position: relative; display: inline-block; width: 36px; height: 20px; border-radius: 10px; background: var(--track); transition: background 0.15s; flex: 0 0 36px; }
+.track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--knob); transition: left 0.15s; }
+.switch[aria-checked="true"] .track { background: var(--ok); }
+.switch[aria-checked="true"] .track::after { left: 18px; }
+.input { min-height: 40px; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); }
+.input.sm { min-height: 34px; }
+select.input { padding-right: 8px; }
+.input:focus-visible, .btn:focus-visible, .nav:focus-visible, .switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* surfaces */
+.card { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+.card.flush { padding: 0; overflow: hidden; }
+.card h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.k { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.row { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-top: 1px solid var(--row); }
+.row:first-of-type { border-top: 0; }
+.banner { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 10px; font-size: 14px; }
+.banner svg { width: 18px; height: 18px; flex: 0 0 18px; }
+.banner.info { background: var(--accent-soft); color: var(--accent-hover); }
+.banner.warn { background: var(--warn-soft); color: var(--warn-text); }
+.banner.error { background: var(--danger-soft); color: var(--danger); }
+.banner.ok { background: var(--ok-soft); color: var(--ok-text); }
+.tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 7px; border-radius: 5px; background: var(--hover); color: var(--text-2); white-space: nowrap; }
+.tag.warn { background: var(--warn-soft); color: var(--warn-text); }
+.chg { color: var(--accent-hover); font-weight: 600; font-size: 12px; }
+.plus { color: var(--ok); }
+.minus { color: var(--warn); }
+
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+td { padding: 11px 12px; border-bottom: 1px solid var(--row); vertical-align: middle; }
+tr:last-child td { border-bottom: 0; }
+tr.tier td { background: var(--bg); font-weight: 600; font-size: 13px; color: var(--text-2); padding: 8px 12px; }
+.num { text-align: right; font-family: var(--mono); font-size: 13px; }
+.scroll-x, .card.flush.scroll-x { overflow-x: auto; }
+
+/* settings rows */
+.f { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 10px 0; border-top: 1px solid var(--row); }
+.f:first-of-type { border-top: 0; }
+.hint { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.okc { color: var(--ok); font-weight: 600; }
+.warnc { color: var(--warn); font-weight: 600; }
+
+.busy { position: fixed; right: 20px; bottom: 20px; background: var(--toast); color: var(--toast-text); padding: 10px 16px; border-radius: 8px; font-size: 13px; display: flex; gap: 10px; align-items: center; }
+.busy-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.busy-step { opacity: 0.75; font-size: 12px; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spinner { width: 14px; height: 14px; border: 2px solid color-mix(in srgb, currentColor 35%, transparent); border-top-color: currentColor; border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* editor */
+.editor-host { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface); min-height: 420px; }
+.editor-host .cm-editor { height: calc(100vh - 230px); min-height: 420px; font-size: 13px; }
+.editor-host .cm-scroller { font-family: var(--mono); }
+.editor-host .cm-nullhost-region { background: var(--accent-soft); }
+.editor-host .cm-foldPlaceholder { background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--accent-hover); padding: 0 8px; }
+
+@media (max-width: 1100px) {
+  .grid2 { grid-template-columns: minmax(0, 1fr); }
+  .span2 { grid-column: auto; }
+}

@@ -1,0 +1,120 @@
+{
+  "version": "2026-10-26",
+  "notes": "Seed catalog. 'verified' = fetched and parsed successfully by the M0 spike on that date. Tiers: recommended = on after install; stricter and optional = off. HaGeZi Multi is listed so the entry budget can refuse it visibly: 365k hosts in hosts format is over the Windows ceiling.",
+  "sources": [
+    {
+      "id": "stevenblack",
+      "name": "StevenBlack unified",
+      "url": "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
+      "format": "hosts",
+      "licence": "MIT",
+      "tier": "recommended",
+      "category": "ads + malware",
+      "verified": "2026-10-26"
+    },
+    {
+      "id": "adaway",
+      "name": "AdAway official",
+      "url": "https://adaway.org/hosts.txt",
+      "format": "hosts",
+      "licence": "CC BY 3.0",
+      "tier": "recommended",
+      "category": "mobile ads",
+      "verified": "2026-10-26"
+    },
+    {
+      "id": "petelowe",
+      "name": "Pete Lowe (pgl.yoyo.org)",
+      "url": "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext",
+      "format": "hosts",
+      "licence": "MCRAE",
+      "tier": "recommended",
+      "category": "ads",
+      "verified": "2026-10-26"
+    },
+    {
+      "id": "kadhosts",
+      "name": "KADhosts",
+      "url": "https://raw.githubusercontent.com/PolishFiltersTeam/KADhosts/master/KADhosts.txt",
+      "format": "hosts",
+      "licence": "CC BY-SA 4.0",
+      "tier": "stricter",
+      "category": "scam + fraud"
+    },
+    {
+      "id": "phishing-army",
+      "name": "Phishing Army",
+      "url": "https://phishing.army/download/phishing_army_blocklist.txt",
+      "format": "domains",
+      "licence": "CC BY-NC 4.0",
+      "tier": "stricter",
+      "category": "phishing"
+    },
+    {
+      "id": "hagezi-multi",
+      "name": "HaGeZi Multi Normal",
+      "url": "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists-legacy@latest/hosts/multi.txt",
+      "format": "hosts",
+      "licence": "GPL-3.0",
+      "tier": "stricter",
+      "category": "ads + tracking + scam",
+      "verified": "2026-10-26",
+      "warning": "About 365k hosts in hosts format: over the Windows hard ceiling on its own."
+    },
+    {
+      "id": "sb-gambling",
+      "name": "StevenBlack: gambling only",
+      "url": "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/gambling-only/hosts",
+      "format": "hosts",
+      "licence": "MIT",
+      "tier": "optional",
+      "category": "gambling"
+    },
+    {
+      "id": "sb-fakenews",
+      "name": "StevenBlack: fake news only",
+      "url": "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-only/hosts",
+      "format": "hosts",
+      "licence": "MIT",
+      "tier": "optional",
+      "category": "fake news"
+    },
+    {
+      "id": "sb-social",
+      "name": "StevenBlack: social only",
+      "url": "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/social-only/hosts",
+      "format": "hosts",
+      "licence": "MIT",
+      "tier": "optional",
+      "category": "social"
+    },
+    {
+      "id": "sb-porn",
+      "name": "StevenBlack: porn only",
+      "url": "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/porn-only/hosts",
+      "format": "hosts",
+      "licence": "MIT",
+      "tier": "optional",
+      "category": "adult"
+    },
+    {
+      "id": "nocoin",
+      "name": "NoCoin (crypto-mining)",
+      "url": "https://raw.githubusercontent.com/hoshsadiq/adblock-nocoin-list/master/hosts.txt",
+      "format": "hosts",
+      "licence": "MIT",
+      "tier": "optional",
+      "category": "crypto-mining"
+    },
+    {
+      "id": "hagezi-winoffice",
+      "name": "HaGeZi: Windows & Office telemetry",
+      "url": "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists-legacy@latest/hosts/native.winoffice.txt",
+      "format": "hosts",
+      "licence": "GPL-3.0",
+      "tier": "optional",
+      "category": "telemetry",
+      "warning": "Can break Microsoft services and trips Defender's HostsFileHijack detection."
+    }
+  ]
+}

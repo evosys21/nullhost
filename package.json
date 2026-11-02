@@ -1,0 +1,28 @@
+{
+  "name": "nullhost",
+  "private": true,
+  "description": "NullHost: hosts-file ad and tracker blocker for Windows",
+  "license": "UNLICENSED",
+  "type": "module",
+  "packageManager": "yarn@4.1.1",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "test": "node --test \"packages/*/test/**/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.json && yarn workspace @nullhost/desktop typecheck",
+    "check": "yarn typecheck && yarn test",
+    "nullhost": "node packages/cli/src/main.ts",
+    "desktop": "yarn workspace @nullhost/desktop dev",
+    "desktop:web": "yarn workspace @nullhost/desktop dev:web",
+    "desktop:copy": "node scripts/dev-on-copy.mjs",
+    "desktop:live": "node scripts/dev-live.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.9.2"
+  }
+}
