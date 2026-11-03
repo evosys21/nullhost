@@ -47,9 +47,9 @@ function pauseHour() {
   void act("Pausing", () => api.pause(new Date(Date.now() + 3600_000).toISOString()));
 }
 async function updateNow() {
-  const r = await act("Updating", () => api.update(), (r) =>
+  const r = await act("Updating lists", () => api.update(), (r) =>
     r.pending ? `Lists updated (${fmt(r.hosts)} hosts); blocking is ${r.mode}, so nothing was written.` :
-    r.written ? `Updated: ${fmt(r.hosts)} hosts, +${fmt(r.diff.added)} / −${fmt(r.diff.removed)}.` :
+    r.written ? `Lists updated: ${fmt(r.hosts)} hosts, +${fmt(r.diff.added)} / −${fmt(r.diff.removed)}.` :
     "Lists checked: nothing changed, the hosts file was not touched.");
   if (r) store.lastResult = r;
 }
@@ -82,7 +82,7 @@ async function setupLogin() {
   await act("Turning on start at login", () => api.setSettings({ startAtLogin: true }), () => "NullHost will start in the tray when you log in.");
 }
 async function setupDaily() {
-  const r = await act("Turning on daily updates", () => api.setSchedule("07:30"), () => "Daily updates are on, at 07:30.");
+  const r = await act("Turning on daily list updates", () => api.setSchedule("07:30"), () => "Daily list updates are on, at 07:30.");
   if (r) schedule.value = r;
 }
 function nextLabel(iso: string): string {
@@ -98,7 +98,7 @@ function nextLabel(iso: string): string {
 const nextRun = computed(() => {
   const x = schedule.value;
   if (!x) return "";
-  if (!x.installed) return "automatic updates off";
+  if (!x.installed) return "daily list updates off";
   return x.nextRun ? nextLabel(x.nextRun) : `daily at ${x.at}`;
 });
 
@@ -135,7 +135,7 @@ async function allowIt() {
       <Toggle :model-value="mode === 'enabled'" label="Hosts blocking" :disabled="!canWrite || !!store.busy" :show-text="mode === 'enabled' ? 'Enabled' : 'Disabled'" @update:model-value="setEnabled" />
     </span>
     <button class="btn" type="button" title="Write the current selection without downloading" :disabled="!canWrite || !!store.busy" @click="applyNow"><Icon name="check" />Apply</button>
-    <button class="btn primary" type="button" title="Download changed lists and apply" :disabled="!canWrite || !!store.busy" @click="updateNow"><Icon name="refresh" />Update now</button>
+    <button class="btn primary" type="button" title="Download the blocklists that changed and write the hosts file" :disabled="!canWrite || !!store.busy" @click="updateNow"><Icon name="refresh" />Update lists</button>
   </header>
 
   <div class="content">
@@ -151,7 +151,7 @@ async function allowIt() {
         <div><div class="k">Sources enabled</div><div style="font-size: 18px; font-weight: 600; margin-top: 4px">{{ enabledCount }} of {{ store.sources.length }}</div></div>
         <div><div class="k">Blocked hosts</div><div style="font-size: 18px; font-weight: 600; margin-top: 4px">{{ fmt(s?.region.hosts) }}</div><div class="hint" v-if="mode !== 'enabled' && s?.cachedRegion">{{ fmt(s.cachedRegion.hosts) }} when enabled</div></div>
         <div><div class="k">Lines written</div><div style="font-size: 18px; font-weight: 600; margin-top: 4px">{{ fmt(s?.region.lines) }}</div><div class="hint">9 hosts per line</div></div>
-        <div><div class="k">Last update</div><div style="font-size: 18px; font-weight: 600; margin-top: 4px">{{ ago(s?.lastUpdate?.at) }}</div><div class="hint">{{ nextRun || `${s?.snapshots ?? 0} snapshots kept` }}</div></div>
+        <div><div class="k">Lists updated</div><div style="font-size: 18px; font-weight: 600; margin-top: 4px">{{ ago(s?.lastUpdate?.at) }}</div><div class="hint">{{ nextRun || `${s?.snapshots ?? 0} snapshots kept` }}</div></div>
       </div>
     </section>
 
@@ -175,7 +175,7 @@ async function allowIt() {
         <Icon name="check" />{{ store.settings?.startAtLogin ? "Starts at login" : "Start at login" }}
       </button>
       <button class="btn" type="button" :disabled="schedule?.installed || !!store.busy" @click="setupDaily">
-        <Icon name="refresh" />{{ schedule?.installed ? `Daily at ${schedule.at}` : "Daily updates at 07:30" }}
+        <Icon name="refresh" />{{ schedule?.installed ? `Lists daily at ${schedule.at}` : "Daily list updates at 07:30" }}
       </button>
       <button class="btn sm" type="button" @click="dismissSetup">Not now</button>
     </section>
@@ -213,10 +213,10 @@ async function allowIt() {
     <div class="grid2">
       <section class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px">
-          <h2>Last update</h2>
+          <h2>Last list update</h2>
           <span v-if="changedCount" class="tag" style="background: var(--accent-soft); color: var(--accent-hover)">{{ changedCount }} source{{ changedCount === 1 ? "" : "s" }} changed</span>
         </div>
-        <div v-if="!changes.length" class="muted" style="margin-top: 12px">Not checked yet. Update now downloads the enabled lists.</div>
+        <div v-if="!changes.length" class="muted" style="margin-top: 12px">Not checked yet. Update lists downloads the enabled lists.</div>
         <div v-for="c in changes" :key="c.name" class="row" style="margin-top: 4px">
           <span>{{ c.name }}</span>
           <span v-if="c.run?.from === 'failed'" class="warnc" style="font-size: 13px">failed</span>

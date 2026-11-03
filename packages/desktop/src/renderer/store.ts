@@ -1,5 +1,5 @@
 import { reactive } from "vue";
-import type { AppInfo, ApplySummary, DesktopSettings, NullhostApi, SourceView, Status } from "../shared/api";
+import type { AppInfo, AppUpdate, ApplySummary, DesktopSettings, NullhostApi, SourceView, Status } from "../shared/api";
 import { createMockApi } from "./mock";
 
 /** The real API from the preload, or an in-memory mock when the UI runs in a plain browser. */
@@ -15,6 +15,8 @@ export const store = reactive({
   sources: [] as SourceView[],
   allowlist: [] as string[],
   settings: null as DesktopSettings | null,
+  /** a newer NullHost on GitHub, from the last check */
+  appUpdate: null as AppUpdate | null,
   /** what is running right now, shown bottom right */
   busy: "",
   /** the step of `busy` running right now, from the main process ("Downloading AdAway (2 of 3)") */
@@ -32,14 +34,15 @@ export function cleanError(err: unknown): string {
 
 export async function refresh(): Promise<void> {
   try {
-    const [info, status, sources, allowlist, settings] = await Promise.all([
+    const [info, status, sources, allowlist, settings, appUpdate] = await Promise.all([
       api.info(),
       api.status(),
       api.sources(),
       api.allowlist(),
       api.settings(),
+      api.appUpdate(),
     ]);
-    Object.assign(store, { info, status, sources, allowlist, settings });
+    Object.assign(store, { info, status, sources, allowlist, settings, appUpdate });
   } catch (err) {
     store.error = cleanError(err);
   }

@@ -19,8 +19,12 @@ the window, the tray or a hotkey.
   domains, Adblock or dnsmasq format.
 - **Allowlist** by host, `*.suffix` or `/regex/`, and a host check that tells
   you whether a name is blocked and by which list.
-- **Daily automatic updates** through a Windows scheduled task; only changed
+- **Daily list updates** through a Windows scheduled task; only changed
   lists are downloaded.
+- **New-version notice:** once a day the app asks GitHub for the latest
+  release and, when there is a newer one, shows where to download it. It never
+  downloads or installs anything by itself, and it can be switched off in
+  Settings.
 - **Safe writes:** a snapshot is taken before every write, and you can restore
   the previous or the original hosts file at any time. The region is written
   9 hosts per line, which keeps Windows' DNS Client responsive with large lists.
@@ -47,7 +51,15 @@ If another hosts-file blocker is running (HostsMan, for instance), quit it and
 turn off its automatic updates first, so the two don't overwrite each other.
 
 On first start, the Dashboard's "Finish setting up" card switches on start at
-login and daily updates. Then press **Update now**.
+login and daily list updates. Then press **Update lists**.
+
+### Updating NullHost
+
+When a new version is out, NullHost shows a notice (and a Windows
+notification once per version) with a link to its release page. Download the
+new installer and run it: it upgrades in place and keeps your settings, the
+snapshots and the blocking. "Update lists" only refreshes the blocklists, not
+the app.
 
 ### Build the installer yourself
 

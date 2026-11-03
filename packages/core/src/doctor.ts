@@ -83,7 +83,7 @@ export async function doctor(
   if (!r.present) {
     add(r.unterminated
       ? { id: "region", level: "error", label: "NullHost region", detail: "its start and end markers do not pair up; NullHost does not write the file until they do", fix: "Open the Editor and remove the broken marker lines (or restore a snapshot), then Apply." }
-      : { id: "region", level: st.lastApply ? "warn" : "info", label: "NullHost region", detail: st.lastApply ? "missing: something removed it" : "not written yet", fix: "Apply or Update now writes it." });
+      : { id: "region", level: st.lastApply ? "warn" : "info", label: "NullHost region", detail: st.lastApply ? "missing: something removed it" : "not written yet", fix: "Apply or Update lists writes it." });
   } else if (r.modifiedExternally) {
     add({ id: "region", level: "warn", label: "NullHost region", detail: "changed by something else since NullHost wrote it", fix: "Apply rewrites it. If it keeps happening, another tool (HostsMan's updater, Defender) is rewriting the file." });
   } else if (r.count > 1) {
@@ -113,9 +113,9 @@ export async function doctor(
   }
 
   const last = st.lastUpdate?.at;
-  if (!last) add({ id: "updated", level: "info", label: "Last update", detail: "never", fix: "Update now downloads the lists." });
-  else if (now.getTime() - new Date(last).getTime() > 3 * DAY) add({ id: "updated", level: "warn", label: "Last update", detail: `${Math.floor((now.getTime() - new Date(last).getTime()) / DAY)} days ago`, fix: "Update now, and turn on automatic updates." });
-  else add({ id: "updated", level: "ok", label: "Last update", detail: new Date(last).toLocaleString() });
+  if (!last) add({ id: "updated", level: "info", label: "Last list update", detail: "never", fix: "Update lists downloads them." });
+  else if (now.getTime() - new Date(last).getTime() > 3 * DAY) add({ id: "updated", level: "warn", label: "Last list update", detail: `${Math.floor((now.getTime() - new Date(last).getTime()) / DAY)} days ago`, fix: "Update lists, and turn on daily list updates." });
+  else add({ id: "updated", level: "ok", label: "Last list update", detail: new Date(last).toLocaleString() });
   const failed = Object.entries(st.lastUpdate?.sources ?? {}).filter(([, run]) => run.from === "failed" || run.from === "cache-fallback");
   if (failed.length) {
     add({ id: "sources", level: "warn", label: "Sources that did not download", detail: failed.map(([id, run]) => `${id} (${run.error ?? run.from})`).join(", "), fix: "Usually temporary. If it persists, the list may have moved or been retired." });
@@ -123,9 +123,9 @@ export async function doctor(
 
   if (o.schedule) {
     const s = o.schedule;
-    if (!s.installed) add({ id: "schedule", level: "info", label: "Automatic updates", detail: s.available ? "off" : "off (switching it on needs NullHost running as administrator)" });
-    else if (s.lastResult !== undefined && s.lastResult !== 0 && s.lastRun) add({ id: "schedule", level: "warn", label: "Automatic updates", detail: `last run ${s.lastRun} failed (result ${s.lastResult})`, fix: "Run Update now to see the error." });
-    else add({ id: "schedule", level: "ok", label: "Automatic updates", detail: `daily at ${s.at ?? "?"}${s.nextRun ? `, next ${s.nextRun}` : ""}` });
+    if (!s.installed) add({ id: "schedule", level: "info", label: "Daily list updates", detail: s.available ? "off" : "off (switching it on needs NullHost running as administrator)" });
+    else if (s.lastResult !== undefined && s.lastResult !== 0 && s.lastRun) add({ id: "schedule", level: "warn", label: "Daily list updates", detail: `last run ${s.lastRun} failed (result ${s.lastResult})`, fix: "Run Update lists to see the error." });
+    else add({ id: "schedule", level: "ok", label: "Daily list updates", detail: `daily at ${s.at ?? "?"}${s.nextRun ? `, next ${s.nextRun}` : ""}` });
   }
 
   const diag = p.diagnostics;

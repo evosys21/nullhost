@@ -21,8 +21,8 @@ async function toggle(s: SourceView, on: boolean) {
   await act(on ? "Enabling source" : "Disabling source", () => api.setSource(s.id, on));
   dirty.value = true;
 }
-async function checkUpdates() {
-  const r = await act("Checking for updates", () => api.update(true), (r) => `Checked: ${fmt(r.hosts)} hosts after merge, ${fmt(r.diff.added)} new and ${fmt(r.diff.removed)} gone since the hosts file was written. Nothing written yet.`);
+async function checkLists() {
+  const r = await act("Checking lists", () => api.update(true), (r) => `Checked: ${fmt(r.hosts)} hosts after merge, ${fmt(r.diff.added)} new and ${fmt(r.diff.removed)} gone since the hosts file was written. Nothing written yet.`);
   if (r) store.lastResult = r;
 }
 async function applyNow() {
@@ -58,7 +58,7 @@ function change(s: SourceView): string {
       <h1>Sources</h1>
       <div class="sub">{{ enabled }} of {{ store.sources.length }} enabled · {{ fmt(store.status?.lastUpdate?.hosts) }} unique hosts at the last update · budget {{ fmt(store.settings?.budget) }}</div>
     </div>
-    <button class="btn" type="button" :disabled="!!store.busy" @click="checkUpdates"><Icon name="refresh" />Check for updates</button>
+    <button class="btn" type="button" title="Download the lists that changed and show what would change, without writing" :disabled="!!store.busy" @click="checkLists"><Icon name="refresh" />Check lists</button>
     <button class="btn" type="button" @click="adding = !adding"><Icon name="plus" />Add source</button>
     <button class="btn primary" type="button" :disabled="!canWrite || !!store.busy" @click="applyNow">Apply</button>
   </header>

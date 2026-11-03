@@ -426,7 +426,7 @@ export class Engine {
 
   // ---------------------------------------------------------------- apply
 
-  /** "Update now" and the scheduled task: download what changed, then apply. */
+  /** "Update lists" and the scheduled task: download what changed, then apply. */
   async update(opts: { fetchOnly?: boolean; dryRun?: boolean } = {}): Promise<ApplyResult> {
     const b = await this.build(true);
     const st = await this.state();

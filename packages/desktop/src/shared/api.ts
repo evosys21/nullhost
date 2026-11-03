@@ -78,6 +78,25 @@ export interface DesktopSettings {
   ip: string;
   budget: number;
   hardCeiling: number;
+  /** ask GitHub once a day whether a newer NullHost is out */
+  checkAppUpdates: boolean;
+}
+
+/** a newer NullHost on GitHub Releases; NullHost only points to it, the user installs it */
+export interface AppUpdate {
+  /** checking is on (Settings) */
+  enabled: boolean;
+  /** this app's version */
+  current: string;
+  /** the newest published release, once checked */
+  latest?: string;
+  /** that release's download page, when it is newer */
+  url?: string;
+  /** newer, checking on, and not skipped: show the notice */
+  available: boolean;
+  checkedAt?: string;
+  /** the last check failed (offline, GitHub unreachable); nothing is shown for it */
+  error?: string;
 }
 
 /** what Import settings brought in */
@@ -102,7 +121,7 @@ export interface NullhostApi {
   /** replace the allowlist with the patterns found in pasted text; returns what was kept and skipped */
   allowSave(text: string): Promise<AllowText>;
   check(host: string): Promise<CheckResult>;
-  /** fetch changed sources and apply ("Update now"); fetchOnly = "Check for updates" */
+  /** fetch changed sources and apply ("Update lists"); fetchOnly = "Check lists" */
   update(fetchOnly?: boolean): Promise<ApplySummary>;
   /** rebuild from the cache and write, no downloads */
   apply(): Promise<ApplySummary>;
@@ -119,7 +138,7 @@ export interface NullhostApi {
   planTidy(): Promise<TidyPreview>;
   tidy(): Promise<TidyPreview>;
   settings(): Promise<DesktopSettings>;
-  setSettings(s: Partial<Pick<DesktopSettings, "theme" | "startAtLogin" | "hotkey" | "ip" | "budget">>): Promise<DesktopSettings>;
+  setSettings(s: Partial<Pick<DesktopSettings, "theme" | "startAtLogin" | "hotkey" | "ip" | "budget" | "checkAppUpdates">>): Promise<DesktopSettings>;
   openBackupFolder(): Promise<void>;
   /** save config.toml to a file the user picks; the path, or null when cancelled */
   exportSettings(): Promise<string | null>;
@@ -131,6 +150,12 @@ export interface NullhostApi {
   schedule(): Promise<ScheduleStatus>;
   /** "HH:MM" installs or moves the task; null removes it */
   setSchedule(at: string | null): Promise<ScheduleStatus>;
+  /** what the last check for a new NullHost version found (no network) */
+  appUpdate(): Promise<AppUpdate>;
+  /** check GitHub now ("Check now"); also clears a skipped version */
+  checkAppUpdate(): Promise<AppUpdate>;
+  /** "Skip this version": no notice until a newer one */
+  skipAppUpdate(version: string): Promise<AppUpdate>;
   /** other hosts-file tools running right now, e.g. "HostsMan (hm.exe)" */
   conflicts(): Promise<string[]>;
   /** called after anything changed (any window, the tray, the hotkey, the pause timer) */
@@ -172,6 +197,9 @@ export const API_METHODS = [
   "doctor",
   "schedule",
   "setSchedule",
+  "appUpdate",
+  "checkAppUpdate",
+  "skipAppUpdate",
   "conflicts",
 ] as const satisfies ReadonlyArray<Exclude<keyof NullhostApi, "onChanged" | "onProgress">>;
 
