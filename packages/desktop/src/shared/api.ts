@@ -92,6 +92,8 @@ export interface AppUpdate {
   latest?: string;
   /** that release's download page, when it is newer */
   url?: string;
+  /** latest is newer than this app, whatever the settings say ("Check now" reports it) */
+  newer: boolean;
   /** newer, checking on, and not skipped: show the notice */
   available: boolean;
   checkedAt?: string;

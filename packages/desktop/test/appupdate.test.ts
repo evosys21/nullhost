@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
-import { CHECK_EVERY_MS, RELEASES_API, appUpdateView, checkDue, fetchLatestVersion, isNewer, notifyDue, parseVersion, releaseUrl, type FetchFn } from "../src/main/appupdate.ts";
+import { readHostsFile, writeWithRetry, type Platform } from "@nullhost/core";
+import { CHECK_EVERY_MS, RELEASES_API, afterCheck, appUpdateView, checkDue, fetchLatestVersion, isNewer, notifyDue, parseVersion, releaseUrl, type FetchFn } from "../src/main/appupdate.ts";
+import { Service } from "../src/main/service.ts";
 
 test("versions: plain x.y.z with an optional v; pre-releases and junk are not versions", () => {
   assert.deepEqual(parseVersion("v1.2.3"), [1, 2, 3]);
@@ -39,13 +44,29 @@ test("latest release: failures are short messages", async () => {
   await assert.rejects(fetchLatestVersion("0.1.0", async () => { throw new TypeError("fetch failed"); }), /could not be reached/);
 });
 
-test("background check: due once a day, never when switched off", () => {
+test("background check: due once a day (24 h), never when switched off", () => {
   const now = Date.parse("2026-11-03T12:00:00Z");
+  const ago = (h: number) => new Date(now - h * 3600_000).toISOString();
+  assert.equal(CHECK_EVERY_MS, 24 * 3600_000);
   assert.equal(checkDue({}, now), true, "never checked");
-  assert.equal(checkDue({ latestCheckedAt: new Date(now - 3600_000).toISOString() }, now), false);
-  assert.equal(checkDue({ latestCheckedAt: new Date(now - CHECK_EVERY_MS).toISOString() }, now), true);
+  assert.equal(checkDue({ latestCheckedAt: ago(1) }, now), false);
+  assert.equal(checkDue({ latestCheckedAt: ago(21) }, now), false, "21 h is not a day");
+  assert.equal(checkDue({ latestCheckedAt: ago(24) }, now), true);
   assert.equal(checkDue({ latestCheckedAt: "garbage" }, now), true);
   assert.equal(checkDue({ checkAppUpdates: false }, now), false);
+  // a failed attempt counts: no retry every few hours
+  assert.equal(checkDue({ latestCheckedAt: ago(48), lastAttemptAt: ago(2) }, now), false);
+});
+
+test("after a check: success records the release; failure keeps it and records the attempt", () => {
+  const at = new Date("2026-11-03T12:00:00Z");
+  const known = { latestVersion: "0.2.0", latestCheckedAt: "2026-11-01T12:00:00Z", skippedVersion: "0.2.0", lastError: "old" };
+  const ok = afterCheck(known, { version: "0.3.0" }, at, false);
+  assert.deepEqual([ok.latestVersion, ok.latestCheckedAt, ok.lastAttemptAt, ok.lastError, ok.skippedVersion], ["0.3.0", at.toISOString(), at.toISOString(), undefined, "0.2.0"]);
+  const failed = afterCheck(known, { error: "GitHub answered 403" }, at, false);
+  assert.deepEqual([failed.latestVersion, failed.latestCheckedAt, failed.lastAttemptAt, failed.lastError], ["0.2.0", "2026-11-01T12:00:00Z", at.toISOString(), "GitHub answered 403"]);
+  assert.equal(afterCheck(known, { version: "0.2.0" }, at, true).skippedVersion, undefined, "Check now clears a skip");
+  assert.equal(appUpdateView(failed, "0.1.0").error, "GitHub answered 403");
 });
 
 test("notice: newer and not skipped; the notification once per version", () => {
@@ -57,10 +78,89 @@ test("notice: newer and not skipped; the notification once per version", () => {
   assert.equal(appUpdateView(seen, "0.2.0").url, undefined);
   assert.equal(appUpdateView({ ...seen, skippedVersion: "0.2.0" }, "0.1.0").available, false);
   assert.equal(appUpdateView({ ...seen, skippedVersion: "0.1.5" }, "0.1.0").available, true, "an older skip does not hide a newer one");
-  assert.equal(appUpdateView({ ...seen, checkAppUpdates: false }, "0.1.0").available, false);
+  const off = appUpdateView({ ...seen, checkAppUpdates: false }, "0.1.0");
+  assert.equal(off.available, false, "no banner when checking is off");
+  assert.equal(off.newer, true, "but Check now still reports the newer release");
   assert.equal(appUpdateView({ latestVersion: "<script>" }, "0.1.0").latest, undefined);
 
   assert.equal(notifyDue(seen, "0.1.0"), true);
   assert.equal(notifyDue({ ...seen, notifiedVersion: "0.2.0" }, "0.1.0"), false);
   assert.equal(notifyDue({ ...seen, notifiedVersion: "0.1.5" }, "0.1.0"), true);
+});
+
+/** a Service on a temp copy, with GitHub replaced by `latest` */
+async function service(latest: () => Promise<string>) {
+  const dir = await mkdtemp(join(tmpdir(), "nullhost-appupdate-"));
+  const hostsFile = join(dir, "hosts");
+  await writeFile(hostsFile, "127.0.0.1 localhost\r\n");
+  const platform: Platform = {
+    name: "windows", eol: "\r\n", perLine: 9, hardCeiling: 1_000,
+    systemHostsPath: () => "C:\\Windows\\System32\\drivers\\etc\\hosts",
+    isElevated: async () => false,
+    readHosts: readHostsFile,
+    writeHosts: (p, c) => writeWithRetry(p, c),
+    flushDns: async () => undefined,
+  };
+  const svc = await Service.create({
+    version: "0.1.0", hostsFile, dataDir: join(dir, "data"), platform, dev: true,
+    scheduler: () => { throw new Error("not in this test"); },
+    scheduledCommand: () => { throw new Error("not in this test"); },
+    autostart: { available: false, isEnabled: async () => false, enable: async () => undefined, disable: async () => undefined },
+    registerHotkey: () => true,
+    openPath: async () => undefined,
+    latestVersion: latest,
+  });
+  const desktopJson = async () => JSON.parse(await readFile(join(dir, "data", "desktop.json"), "utf8")) as Record<string, unknown>;
+  return { svc, desktopJson, done: () => rm(dir, { recursive: true, force: true }) };
+}
+
+test("service: settings changed while GitHub answers are kept", async () => {
+  let answer!: (v: string) => void;
+  const t = await service(() => new Promise((r) => (answer = r)));
+  try {
+    const pending = t.svc.checkAppUpdateIfDue();
+    await t.svc.setSettings({ checkAppUpdates: false, theme: "dark", hotkey: "Control+Alt+J" });
+    answer("0.2.0");
+    const u = await pending;
+    assert.equal(u?.latest, "0.2.0");
+    assert.equal(u?.enabled, false, "the check did not switch checking back on");
+    const d = await t.desktopJson();
+    assert.deepEqual([d.checkAppUpdates, d.theme, d.hotkey, d.latestVersion], [false, "dark", "Control+Alt+J", "0.2.0"]);
+  } finally {
+    await t.done();
+  }
+});
+
+test("service: a failed check waits a day; Check now reports a newer release even when checking is off", async () => {
+  let calls = 0;
+  let fail = true;
+  const t = await service(async () => { calls++; if (fail) throw new Error("GitHub answered 403"); return "0.2.0"; });
+  try {
+    const u = await t.svc.checkAppUpdateIfDue();
+    assert.equal(u?.error, "GitHub answered 403");
+    assert.equal(await t.svc.checkAppUpdateIfDue(), null, "not again right after a failure");
+    assert.equal(await t.svc.checkAppUpdateIfDue(Date.now() + CHECK_EVERY_MS + 1000) !== null, true, "again a day later");
+    assert.equal(calls, 2);
+
+    fail = false;
+    await t.svc.setSettings({ checkAppUpdates: false });
+    const now = await t.svc.checkAppUpdate();
+    assert.deepEqual([now.newer, now.available, now.latest, now.error], [true, false, "0.2.0", undefined]);
+    assert.equal(await t.svc.takeAppUpdateNotice(), null, "no notification while checking is off");
+  } finally {
+    await t.done();
+  }
+});
+
+test("service: the notification once per version, and not for a skipped one", async () => {
+  const t = await service(async () => "0.2.0");
+  try {
+    await t.svc.checkAppUpdate();
+    assert.equal((await t.svc.takeAppUpdateNotice())?.latest, "0.2.0");
+    assert.equal(await t.svc.takeAppUpdateNotice(), null);
+    await t.svc.skipAppUpdate("0.2.0");
+    assert.equal((await t.svc.appUpdate()).available, false);
+  } finally {
+    await t.done();
+  }
 });

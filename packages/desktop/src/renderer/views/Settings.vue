@@ -39,7 +39,7 @@ const appUpdate = computed(() => store.appUpdate);
 async function checkAppUpdate() {
   await act("Checking for a new version", () => api.checkAppUpdate(), (u) =>
     u.error ? `Could not check: ${u.error}.` :
-    u.available ? `NullHost ${u.latest} is available.` :
+    u.newer ? `NullHost ${u.latest} is available.` :
     `NullHost ${u.current} is the latest version.`);
 }
 async function runChecks() {

@@ -17,7 +17,7 @@ import {
   type WriteReport,
 } from "@nullhost/core";
 import type { AllowText, AppInfo, AppUpdate, ApplySummary, ImportSummary, DesktopSettings, NullhostApi, SourceView, Theme, TidyPreview } from "../shared/api";
-import { appUpdateView, checkDue, fetchLatestVersion, notifyDue, type StoredAppUpdate } from "./appupdate";
+import { afterCheck, appUpdateView, checkDue, fetchLatestVersion, notifyDue, type StoredAppUpdate } from "./appupdate.ts";
 import type { Autostart } from "./autostart";
 import type { HelperBroker } from "./helper";
 
@@ -109,7 +109,10 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
   private listeners = new Set<() => void>();
   private progressListeners = new Set<(step: string) => void>();
   private readonly desktopFile: string;
-  private appUpdateError: string | undefined;
+  /** desktop.json changes, one at a time (each reads the file fresh) */
+  private desktopQueue: Promise<unknown> = Promise.resolve();
+  /** the check for a new version that is running, if any */
+  private appUpdateRun: Promise<AppUpdate> | null = null;
 
   private constructor(o: ServiceOptions, engine: Engine, elevated: boolean, broker: HelperBroker | null) {
     this.o = o;
@@ -368,9 +371,16 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
     }
   }
 
-  private async saveDesktop(d: DesktopFile): Promise<void> {
-    await mkdir(dirname(this.desktopFile), { recursive: true });
-    await writeFile(this.desktopFile, JSON.stringify(d, null, 2) + "\n", "utf8");
+  /** Change desktop.json: read it, apply fn, write it; queued, so no change overwrites another. */
+  private updateDesktop(fn: (d: DesktopFile) => DesktopFile): Promise<DesktopFile> {
+    const run = this.desktopQueue.then(async () => {
+      const d = fn(await this.desktop());
+      await mkdir(dirname(this.desktopFile), { recursive: true });
+      await writeFile(this.desktopFile, JSON.stringify(d, null, 2) + "\n", "utf8");
+      return d;
+    });
+    this.desktopQueue = run.catch(() => undefined);
+    return run;
   }
 
   /** Register the saved hotkey (called once at start). */
@@ -401,10 +411,14 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
   async setSettings(s: Partial<Pick<DesktopSettings, "theme" | "startAtLogin" | "hotkey" | "ip" | "budget" | "checkAppUpdates">>): Promise<DesktopSettings> {
     if (s.theme !== undefined) {
       if (!THEMES.includes(s.theme)) throw new Error(`Unknown theme: ${s.theme}`);
-      await this.saveDesktop({ ...(await this.desktop()), theme: s.theme });
-      this.o.applyTheme?.(s.theme);
+      const theme = s.theme;
+      await this.updateDesktop((d) => ({ ...d, theme }));
+      this.o.applyTheme?.(theme);
     }
-    if (s.checkAppUpdates !== undefined) await this.saveDesktop({ ...(await this.desktop()), checkAppUpdates: Boolean(s.checkAppUpdates) });
+    if (s.checkAppUpdates !== undefined) {
+      const on = Boolean(s.checkAppUpdates);
+      await this.updateDesktop((d) => ({ ...d, checkAppUpdates: on }));
+    }
     if (s.ip !== undefined || s.budget !== undefined) await this.engine.setOptions({ ip: s.ip, budget: s.budget });
     if (s.hotkey !== undefined) {
       const d = await this.desktop();
@@ -414,7 +428,8 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
         throw new Error(`${s.hotkey} could not be registered (taken by another app?); kept ${d.hotkey}`);
       }
       this.hotkeyOk = true;
-      await this.saveDesktop({ ...d, hotkey: s.hotkey });
+      const hotkey = s.hotkey;
+      await this.updateDesktop((x) => ({ ...x, hotkey }));
     }
     if (s.startAtLogin !== undefined) {
       if (!this.o.autostart.available) throw new Error("Start at login is available in the installed app.");
@@ -428,21 +443,20 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
   // ------------------------------------------------------------ new NullHost versions
 
   async appUpdate(): Promise<AppUpdate> {
-    return appUpdateView(await this.desktop(), this.o.version, this.appUpdateError);
+    return appUpdateView(await this.desktop(), this.o.version);
   }
 
-  private async fetchAppUpdate(clearSkip: boolean): Promise<AppUpdate> {
+  /** Ask GitHub, then merge the answer (or the error) into desktop.json as it is by then. */
+  private fetchAppUpdate(clearSkip: boolean): Promise<AppUpdate> {
+    if (this.appUpdateRun) return this.appUpdateRun;
     const latest = this.o.latestVersion ?? (() => fetchLatestVersion(this.o.version));
-    const d = await this.desktop();
-    try {
-      const v = await latest();
-      this.appUpdateError = undefined;
-      await this.saveDesktop({ ...d, latestVersion: v, latestCheckedAt: new Date().toISOString(), ...(clearSkip ? { skippedVersion: undefined } : {}) });
-    } catch (err) {
-      this.appUpdateError = (err as Error).message;
-    }
-    this.changed();
-    return this.appUpdate();
+    this.appUpdateRun = (async () => {
+      const result = await latest().then((version) => ({ version }), (err: Error) => ({ error: err.message }));
+      await this.updateDesktop((d) => ({ ...d, ...afterCheck(d, result, new Date(), clearSkip) }));
+      this.changed();
+      return this.appUpdate();
+    })().finally(() => (this.appUpdateRun = null));
+    return this.appUpdateRun;
   }
 
   /** "Check now" in Settings */
@@ -450,23 +464,26 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
     return this.fetchAppUpdate(true);
   }
 
-  /** the background check: only when checking is on and the last check is a day old */
+  /** the background check: only when checking is on and the last attempt is a day old */
   async checkAppUpdateIfDue(now = Date.now()): Promise<AppUpdate | null> {
     return checkDue(await this.desktop(), now) ? this.fetchAppUpdate(false) : null;
   }
 
   async skipAppUpdate(version: string): Promise<AppUpdate> {
-    await this.saveDesktop({ ...(await this.desktop()), skippedVersion: String(version) });
+    const skipped = String(version);
+    await this.updateDesktop((d) => ({ ...d, skippedVersion: skipped }));
     this.changed();
     return this.appUpdate();
   }
 
   /** a newer version the Windows notification has not been shown for; marks it shown */
   async takeAppUpdateNotice(): Promise<AppUpdate | null> {
-    const d = await this.desktop();
-    if (!notifyDue(d, this.o.version)) return null;
-    await this.saveDesktop({ ...d, notifiedVersion: d.latestVersion });
-    return this.appUpdate();
+    let due = false;
+    const d = await this.updateDesktop((x) => {
+      due = notifyDue(x, this.o.version);
+      return due ? { ...x, notifiedVersion: x.latestVersion } : x;
+    });
+    return due ? appUpdateView(d, this.o.version) : null;
   }
 
   // ------------------------------------------------------------ schedule, troubleshoot, catalog

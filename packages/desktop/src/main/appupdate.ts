@@ -6,16 +6,20 @@ import type { AppUpdate } from "../shared/api";
 export const RELEASES_API = "https://api.github.com/repos/evosys21/nullhost/releases/latest";
 const RELEASES_PAGE = "https://github.com/evosys21/nullhost/releases";
 
-/** checks while the app runs: at most one a day */
-export const CHECK_EVERY_MS = 20 * 3600_000;
+/** background checks: at most one a day, counting failed ones */
+export const CHECK_EVERY_MS = 24 * 3600_000;
 
 /** what desktop.json keeps between runs */
 export interface StoredAppUpdate {
   /** off in Settings; on unless set to false */
   checkAppUpdates?: boolean;
-  /** newest release seen, "1.2.3" */
+  /** newest release seen, "1.2.3", and when GitHub said so */
   latestVersion?: string;
   latestCheckedAt?: string;
+  /** the last check, successful or not: background checks wait a day after it */
+  lastAttemptAt?: string;
+  /** why the last check failed; cleared by the next successful one */
+  lastError?: string;
   /** "Skip this version" */
   skippedVersion?: string;
   /** the version the Windows notification was shown for (once per version) */
@@ -61,14 +65,25 @@ export async function fetchLatestVersion(current: string, fetchFn: FetchFn = fet
   return v.join(".");
 }
 
-/** a background check is due: checking is on and the last one is old enough (or never ran) */
+/** a background check is due: checking is on and the last attempt is a day old (or there was none) */
 export function checkDue(s: StoredAppUpdate, now: number): boolean {
   if (s.checkAppUpdates === false) return false;
-  const last = s.latestCheckedAt ? new Date(s.latestCheckedAt).getTime() : NaN;
+  const stamp = s.lastAttemptAt ?? s.latestCheckedAt;
+  const last = stamp ? new Date(stamp).getTime() : NaN;
   return !(now - last < CHECK_EVERY_MS);
 }
 
-export function appUpdateView(s: StoredAppUpdate, current: string, error?: string): AppUpdate {
+/** the state after a check: the release found, or the error; the last known release stays on failure */
+export function afterCheck(s: StoredAppUpdate, result: { version: string } | { error: string }, at: Date, clearSkip: boolean): StoredAppUpdate {
+  const iso = at.toISOString();
+  const next: StoredAppUpdate = { ...s, lastAttemptAt: iso };
+  if ("version" in result) Object.assign(next, { latestVersion: result.version, latestCheckedAt: iso, lastError: undefined });
+  else next.lastError = result.error;
+  if (clearSkip) next.skippedVersion = undefined;
+  return next;
+}
+
+export function appUpdateView(s: StoredAppUpdate, current: string): AppUpdate {
   const enabled = s.checkAppUpdates !== false;
   const latest = parseVersion(s.latestVersion) ? s.latestVersion : undefined;
   const newer = isNewer(latest, current);
@@ -77,9 +92,10 @@ export function appUpdateView(s: StoredAppUpdate, current: string, error?: strin
     current,
     latest,
     url: latest && newer ? releaseUrl(latest) : undefined,
+    newer,
     available: enabled && newer && s.skippedVersion !== latest,
     checkedAt: s.latestCheckedAt,
-    error,
+    error: s.lastError,
   };
 }
 
