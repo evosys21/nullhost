@@ -19,6 +19,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          # its auto cache calls the runner's global Yarn 1 before corepack is on
+          package-manager-cache: false
       - run: corepack enable
       - run: yarn install --immutable
       - run: yarn check
