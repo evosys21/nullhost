@@ -1,5 +1,5 @@
-# Type checks, tests and the Windows installer on every push and PR.
-# A `v*` tag also publishes that installer as a GitHub release.
+# Type checks, tests, the Windows installer and the portable zip on every push and PR.
+# A `v*` tag also publishes both as a GitHub release.
 name: CI
 
 on:
@@ -30,14 +30,16 @@ jobs:
         run: |
           v=$(node -p "require('./packages/desktop/package.json').version")
           [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME != package version v$v"; exit 1; }
-      - name: Build installer
+      - name: Build installer and portable zip
         run: yarn workspace @nullhost/desktop dist
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
       - uses: actions/upload-artifact@v5
         with:
           name: installer
-          path: packages/desktop/dist/NullHost-Setup-*.exe
+          path: |
+            packages/desktop/dist/NullHost-Setup-*.exe
+            packages/desktop/dist/NullHost-*-portable.zip
           if-no-files-found: error
 
   release:
@@ -54,6 +56,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          sha256sum NullHost-Setup-*.exe > SHA256SUMS.txt
-          gh release create "$GITHUB_REF_NAME" NullHost-Setup-*.exe SHA256SUMS.txt \
+          sha256sum NullHost-Setup-*.exe NullHost-*-portable.zip > SHA256SUMS.txt
+          gh release create "$GITHUB_REF_NAME" NullHost-Setup-*.exe NullHost-*-portable.zip SHA256SUMS.txt \
             --repo "$GITHUB_REPOSITORY" --title "NullHost ${GITHUB_REF_NAME#v}" --generate-notes

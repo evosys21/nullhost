@@ -7,7 +7,7 @@ and leaves everything else in the file alone: your own entries stay exactly
 where they are. Blocking can be switched on, off or paused in a second, from
 the window, the tray or a hotkey.
 
-> **Status:** early (0.1.1), Windows only. The installer is not code-signed,
+> **Status:** early (0.1.1), Windows only. The installer and the portable exe are not code-signed,
 > so Windows SmartScreen will warn before running it.
 
 ## Features
@@ -61,6 +61,24 @@ new installer and run it: it upgrades in place and keeps your settings, the
 snapshots and the blocking. "Update lists" only refreshes the blocklists, not
 the app.
 
+### Portable copy
+
+The release also has `NullHost-<version>-portable.zip`. Unpack it anywhere and
+run `NullHost.exe`; nothing is installed. It asks for administrator rights on
+its first change, like the installed app. The portable copy differs in a few ways:
+
+- **No daily list update.** That task runs NullHost with administrator rights
+  every day, so it only points at the copy under Program Files, which other
+  programs can't replace. Press **Update lists** now and then; the Dashboard
+  shows when the lists were last updated.
+- **No start at login.** The folder may move or be on a removable drive.
+- **Settings are not in the folder.** They are in `%APPDATA%\NullHost` and
+  `%LOCALAPPDATA%\NullHost`, the same as the installed app, so the two share them.
+- **To remove it,** press **Remove NullHost from hosts file** under
+  Settings, then delete the folder.
+
+The `NullHost.portable` file next to the exe is what makes it the portable copy.
+
 ### Build the installer yourself
 
 You need Node.js 22.18 or newer. Yarn comes with Node through corepack.
@@ -81,7 +99,8 @@ corepack yarn install
 corepack yarn workspace @nullhost/desktop dist
 ```
 
-That builds `packages/desktop/dist/NullHost-Setup-<version>.exe`; run it as above.
+That builds `packages/desktop/dist/NullHost-Setup-<version>.exe` and
+`NullHost-<version>-portable.zip` next to it; use them as above.
 
 ### Uninstall
 

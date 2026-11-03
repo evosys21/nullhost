@@ -23,6 +23,8 @@ export interface AppInfo {
   configFile: string;
   /** running from source (dev), not the installed app */
   dev: boolean;
+  /** the portable copy (zip): no daily task, no start at login */
+  portable: boolean;
 }
 
 export interface SourceView {
