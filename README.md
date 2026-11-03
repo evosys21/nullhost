@@ -7,9 +7,8 @@ and leaves everything else in the file alone: your own entries stay exactly
 where they are. Blocking can be switched on, off or paused in a second, from
 the window, the tray or a hotkey.
 
-> **Status:** early (0.1.0), Windows only. There are no published releases
-> yet: build the installer from source (below). The installer is not
-> code-signed, so Windows SmartScreen will warn before running it.
+> **Status:** early (0.1.0), Windows only. The installer is not code-signed,
+> so Windows SmartScreen will warn before running it.
 
 ## Features
 
@@ -38,6 +37,20 @@ the window, the tray or a hotkey.
 
 ## Install (Windows)
 
+Download `NullHost-Setup-<version>.exe` from the
+[latest release](https://github.com/evosys21/nullhost/releases/latest) and run
+it. It is built by GitHub Actions from the tagged source. Since it is unsigned,
+SmartScreen asks first ("More info", then "Run anyway"). It installs for all
+users under Program Files, with Start menu and desktop shortcuts.
+
+If another hosts-file blocker is running (HostsMan, for instance), quit it and
+turn off its automatic updates first, so the two don't overwrite each other.
+
+On first start, the Dashboard's "Finish setting up" card switches on start at
+login and daily updates. Then press **Update now**.
+
+### Build the installer yourself
+
 You need Node.js 22.18 or newer. Yarn comes with Node through corepack.
 
 ```bash
@@ -56,22 +69,14 @@ corepack yarn install
 corepack yarn workspace @nullhost/desktop dist
 ```
 
-That builds `packages/desktop/dist/NullHost-Setup-0.1.0.exe`. Run it; since it
-is unsigned, SmartScreen asks first ("More info", then "Run anyway"). It
-installs for all users under Program Files, with Start menu and desktop
-shortcuts.
-
-If another hosts-file blocker is running (HostsMan, for instance), quit it and
-turn off its automatic updates first, so the two don't overwrite each other.
-
-On first start, the Dashboard's "Finish setting up" card switches on start at
-login and daily updates. Then press **Update now**.
+That builds `packages/desktop/dist/NullHost-Setup-0.1.0.exe`; run it as above.
 
 ### Uninstall
 
 Uninstall from Windows Settings. It removes NullHost's region from the hosts
-file, its login entry and its scheduled task. Your config, the snapshots and
-a copy of the original hosts file stay in `%LOCALAPPDATA%\NullHost`.
+file, its login entry and its scheduled task. Your config stays in
+`%APPDATA%\NullHost`; the snapshots and a copy of the original hosts file stay
+in `%LOCALAPPDATA%\NullHost`.
 
 ## Command line
 
@@ -187,3 +192,8 @@ node packages/desktop/scripts/sandbox-test.mjs
 The lists are made and maintained by their authors, under their own licences;
 NullHost downloads them from their published URLs and shows each list's source
 in the app. Thanks to everyone who maintains them.
+
+## License
+
+NullHost is released under the [MIT License](LICENSE), © 2026 EvoSys21. The
+blocklists it downloads are not part of NullHost and keep their own licences.

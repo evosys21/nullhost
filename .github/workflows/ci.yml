@@ -1,0 +1,57 @@
+# Type checks, tests and the Windows installer on every push and PR.
+# A `v*` tag also publishes that installer as a GitHub release.
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: corepack enable
+      - run: yarn install --immutable
+      - run: yarn check
+      - name: Tag matches package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          v=$(node -p "require('./packages/desktop/package.json').version")
+          [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME != package version v$v"; exit 1; }
+      - name: Build installer
+        run: yarn workspace @nullhost/desktop dist
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - uses: actions/upload-artifact@v5
+        with:
+          name: installer
+          path: packages/desktop/dist/NullHost-Setup-*.exe
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: installer
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha256sum NullHost-Setup-*.exe > SHA256SUMS.txt
+          gh release create "$GITHUB_REF_NAME" NullHost-Setup-*.exe SHA256SUMS.txt \
+            --repo "$GITHUB_REPOSITORY" --title "NullHost ${GITHUB_REF_NAME#v}" --generate-notes
