@@ -7,7 +7,7 @@ and leaves everything else in the file alone: your own entries stay exactly
 where they are. Blocking can be switched on, off or paused in a second, from
 the window, the tray or a hotkey.
 
-> **Status:** early (0.1.0), Windows only. The installer is not code-signed,
+> **Status:** early (0.1.1), Windows only. The installer is not code-signed,
 > so Windows SmartScreen will warn before running it.
 
 ## Features
@@ -81,7 +81,7 @@ corepack yarn install
 corepack yarn workspace @nullhost/desktop dist
 ```
 
-That builds `packages/desktop/dist/NullHost-Setup-0.1.0.exe`; run it as above.
+That builds `packages/desktop/dist/NullHost-Setup-<version>.exe`; run it as above.
 
 ### Uninstall
 
