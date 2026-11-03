@@ -33,6 +33,8 @@ export interface ServiceOptions {
   /** what the task runs: this app, headless, against these paths */
   scheduledCommand: (at: string, paths: { dataDir: string; configFile: string; hostsFile?: string }) => Promise<ScheduledCommand>;
   dev: boolean;
+  /** the portable copy: the daily task is not offered (its exe sits in a folder the user can change) */
+  portable?: boolean;
   autostart: Autostart;
   /** registers the global hotkey; returns false if the combination is taken */
   registerHotkey: (accelerator: string) => boolean;
@@ -208,6 +210,7 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
       dataDir: this.engine.paths.dataDir,
       configFile: this.engine.paths.configFile,
       dev: this.o.dev,
+      portable: this.o.portable ?? false,
     };
   }
 
@@ -496,7 +499,7 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
   async schedule(): Promise<ScheduleStatus> {
     const st = await this.scheduler().status();
     // the helper can install it on the user's behalf
-    return { ...st, available: st.available || (this.writer === "helper" && !this.o.dev) };
+    return { ...st, available: st.available || (this.writer === "helper" && !this.o.dev && !this.o.portable) };
   }
 
   async setSchedule(at: string | null): Promise<ScheduleStatus> {

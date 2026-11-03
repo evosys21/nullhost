@@ -101,7 +101,7 @@ async function removeRegion() {
           </select>
         </div>
         <div class="f">
-          <div>Start at login<div class="hint">{{ set.startAtLoginAvailable ? "Starts in the tray at login, no prompt; it asks for administrator rights on its first change" : "Available in the installed app" }}</div></div>
+          <div>Start at login<div class="hint">{{ set.startAtLoginAvailable ? "Starts in the tray at login, no prompt; it asks for administrator rights on its first change" : info?.portable ? "Not in the portable copy" : "Available in the installed app" }}</div></div>
           <Toggle :model-value="set.startAtLogin" label="Start at login" :disabled="!set.startAtLoginAvailable" @update:model-value="(on: boolean) => saveSetting('Saving', { startAtLogin: on }, on ? 'NullHost will start at login.' : 'NullHost will not start at login.')" />
         </div>
         <div class="f">
@@ -143,7 +143,7 @@ async function removeRegion() {
       <section class="card">
         <h2 style="margin-bottom: 8px">Blocklist updates</h2>
         <div class="f">
-          <div>Update the lists daily in the background<div class="hint">{{ schedule?.available ? "Task Scheduler, as you with administrator rights: runs while you are logged on, catches up after the PC was off. Switching it asks for administrator rights" : "Only in the installed NullHost app" }}</div></div>
+          <div>Update the lists daily in the background<div class="hint">{{ schedule?.available ? "Task Scheduler, as you with administrator rights: runs while you are logged on, catches up after the PC was off. Switching it asks for administrator rights" : info?.portable ? "Not in the portable copy: press Update lists on the Dashboard now and then" : "Only in the installed NullHost app" }}</div></div>
           <Toggle :model-value="schedule?.installed ?? false" label="Daily list update" :disabled="!schedule?.available || !!store.busy" @update:model-value="setSchedule" />
         </div>
         <form class="f" @submit.prevent="setSchedule(true)">

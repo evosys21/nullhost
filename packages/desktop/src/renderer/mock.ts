@@ -47,7 +47,7 @@ export function createMockApi(): NullhostApi {
   const summary = (): ApplySummary => ({ mode, hosts: 74_862, lines: 8_319, diff: { added: 312, removed: 41, sampleAdded: [], sampleRemoved: [] }, written: true, pending: false, dryRun: false, warnings: [], runs: {} });
   const done = async <T>(v: T) => { await new Promise((r) => setTimeout(r, 250)); changed(); return v; };
   return {
-    info: async () => ({ version: "0.1.0", platform: "windows", hostsFile: "C:\\Windows\\System32\\drivers\\etc\\hosts", systemFile: true, elevated: false, writer: "helper", helperRunning: false, pauseEnded: false, canWrite: true, dataDir: "%LOCALAPPDATA%\\NullHost", configFile: "%APPDATA%\\NullHost\\config.toml", dev: true }),
+    info: async () => ({ version: "0.1.0", platform: "windows", hostsFile: "C:\\Windows\\System32\\drivers\\etc\\hosts", systemFile: true, elevated: false, writer: "helper", helperRunning: false, pauseEnded: false, canWrite: true, dataDir: "%LOCALAPPDATA%\\NullHost", configFile: "%APPDATA%\\NullHost\\config.toml", dev: true, portable: false }),
     status: async () => status(),
     sources: async () => sources,
     setSource: async (id, on) => { sources = sources.map((s) => (s.id === id ? { ...s, enabled: on } : s)); return done(undefined); },

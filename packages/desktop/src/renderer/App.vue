@@ -48,7 +48,7 @@ const modeLabel = computed(() => {
         <Logo :mode="store.status?.blocking.mode" style="width: 28px; height: 28px; flex: 0 0 28px" />
         <div>
           <div class="brand-name">NullHost</div>
-          <div class="brand-sub">v{{ store.info?.version ?? "" }} · {{ modeLabel }}</div>
+          <div class="brand-sub">v{{ store.info?.version ?? "" }}{{ store.info?.portable ? " portable" : "" }} · {{ modeLabel }}</div>
         </div>
       </div>
       <button

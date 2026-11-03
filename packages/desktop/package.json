@@ -14,7 +14,7 @@
     "smoke": "electron-vite build && electron . --smoke",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "icon": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/make-icon.mts",
-    "dist": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/make-icon.mts && electron-vite build && electron-builder --win --x64 --publish never",
+    "dist": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/make-icon.mts && electron-vite build && electron-builder --win --x64 --publish never && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/make-portable.mts",
     "dist:dir": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/make-icon.mts && electron-vite build && electron-builder --win --x64 --dir --publish never"
   },
   "devDependencies": {

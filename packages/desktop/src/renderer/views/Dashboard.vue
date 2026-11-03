@@ -71,7 +71,7 @@ const setupDismissed = ref(false);
 try { setupDismissed.value = localStorage.getItem(SETUP_KEY) === "1"; } catch { /* storage unavailable */ }
 const showSetup = computed(() => {
   const i = store.info, set = store.settings, sch = schedule.value;
-  if (!i || i.dev || !i.canWrite || !set || !sch || setupDismissed.value) return false;
+  if (!i || i.dev || i.portable || !i.canWrite || !set || !sch || setupDismissed.value) return false;
   return !set.startAtLogin || !sch.installed;
 });
 function dismissSetup() {

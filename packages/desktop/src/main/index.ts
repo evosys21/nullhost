@@ -1,6 +1,7 @@
 import { execFile, spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { appendFile, mkdir, stat, writeFile } from "node:fs/promises";
-import { join, win32 } from "node:path";
+import { dirname, join, win32 } from "node:path";
 import { promisify } from "node:util";
 import { BrowserWindow, Menu, Notification, Tray, app, dialog, globalShortcut, ipcMain, nativeImage, nativeTheme, shell, type MenuItemConstructorOptions } from "electron";
 import { currentPlatform, defaultPaths, quoteArg, windowsScheduler, type ScheduledCommand } from "@nullhost/core";
@@ -42,6 +43,17 @@ const configArg = argValue("--config");
 /** tests: route writes through an unelevated helper on a copy, to exercise the pipe without UAC */
 const forceHelper = process.env.NULLHOST_FORCE_HELPER === "1" && Boolean(hostsFileArg);
 
+/**
+ * The portable copy (the zip) has this file next to NullHost.exe; the installer never
+ * ships it. Its exe sits wherever the zip was unpacked, often a folder the user can
+ * change, so nothing runs it with administrator rights unattended: no daily task, and
+ * no login item pointing at a folder that may move. The UAC-prompted helper still works.
+ */
+const PORTABLE_MARKER = "NullHost.portable";
+const portable = app.isPackaged && existsSync(join(dirname(process.execPath), PORTABLE_MARKER));
+/** the installed app in Program Files: the only build that may set up the task and login item */
+const installed = app.isPackaged && !portable;
+
 const samePath = (a: string, b: string) => win32.resolve(a).toLowerCase() === win32.resolve(b).toLowerCase();
 
 /**
@@ -53,7 +65,7 @@ const samePath = (a: string, b: string) => win32.resolve(a).toLowerCase() === wi
  * never gets a task that acts on files that user can change.
  */
 async function scheduledCommand(at: string, p: { dataDir: string; configFile: string; hostsFile?: string }): Promise<ScheduledCommand> {
-  if (!app.isPackaged) throw new Error("Automatic updates can only be switched on in the installed NullHost app.");
+  if (!installed) throw new Error("Automatic updates can only be switched on in the installed NullHost app.");
   if (p.hostsFile) throw new Error("Automatic updates only update the system hosts file.");
   const own = defaultPaths(process.env);
   if (!samePath(p.dataDir, own.dataDir) || !samePath(p.configFile, own.configFile)) {
@@ -297,7 +309,7 @@ async function helperMain(): Promise<void> {
       if (!override) await platform.flushDns();
     },
     schedule: async (at, paths) => {
-      const s = windowsScheduler(elevated && app.isPackaged);
+      const s = windowsScheduler(elevated && installed);
       if (at === null) await s.remove();
       else await s.install(await scheduledCommand(at, paths));
       return s.status();
@@ -390,9 +402,10 @@ function createService(): Promise<Service> {
     dataDir: dataDirArg,
     configFile: configArg,
     dev: !app.isPackaged,
-    scheduler: (canInstall) => windowsScheduler(canInstall && app.isPackaged),
+    portable,
+    scheduler: (canInstall) => windowsScheduler(canInstall && installed),
     scheduledCommand,
-    autostart: loginItemAutostart(app, app.isPackaged),
+    autostart: loginItemAutostart(app, installed),
     registerHotkey,
     applyTheme,
     openPath: async (p) => { await mkdir(p, { recursive: true }); await shell.openPath(p); },
