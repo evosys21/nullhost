@@ -104,6 +104,24 @@ region. Nothing outside the markers is changed. If the markers in the file
 don't pair up (one deleted or duplicated by hand), NullHost refuses to write
 rather than guess.
 
+### NullHost never redirects
+
+NullHost only blocks. Every line it writes points at `0.0.0.0` (the default)
+or `127.0.0.1`, which you choose in Settings, and nothing else:
+
+- **Blocklists can't redirect you.** An entry that points a name at any other
+  address, such as `1.2.3.4 login.example.com`, is dropped when the list is
+  read. Only the host name is kept, never a list's address.
+- **The setting can't be changed to a real IP.** Settings, the CLI, settings
+  imports and a hand-edited `config.toml` all refuse anything but those two.
+- **Lists are downloaded over HTTPS.**
+
+So the worst a bad list can do is block a site, never send you somewhere
+else. If a site you need stops working, allowlist it.
+
+Entries outside NullHost's region are yours, or another program's, and
+NullHost leaves them alone.
+
 ## Development
 
 No build step for the core and CLI: Node runs the TypeScript directly.

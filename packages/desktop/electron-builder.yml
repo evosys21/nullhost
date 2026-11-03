@@ -1,7 +1,7 @@
 # Windows installer for NullHost. `corepack yarn workspace @nullhost/desktop dist`
 appId: ch.evo21.nullhost
 productName: NullHost
-copyright: Copyright © 2026 Andrei Bintintan
+copyright: Copyright © 2026 EvoSys21
 
 directories:
   output: dist
