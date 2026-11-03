@@ -28,7 +28,9 @@ export function createMockApi(): NullhostApi {
     "0.0.0.0 a-ads.com a.adroll.com a.mobtrks.com a.opttimal.com a.sakh.com a.yieldmo.com a2.adform.net a22.adform.net ad.360yield.com\r\n0.0.0.0 ad.doubleclick.net ad.adview.cn ad.afy11.net ad.agkn.com ad.amgdgt.com ad.atdmt.com ad.duga.jp ad.foxnetworks.com ad.gt\r\n" +
     "# <<< nullhost managed <<<\r\n";
   let schedule: import("../shared/api").ScheduleStatus = { installed: true, available: true, at: "07:30", lastRun: new Date(Date.now() - 6 * 3600_000).toISOString(), lastResult: 0, nextRun: new Date(Date.now() + 18 * 3600_000).toISOString() };
-  let settings: DesktopSettings = { theme: "system", startAtLogin: true, startAtLoginAvailable: true, hotkey: "Control+Alt+H", hotkeyRegistered: true, ip: "0.0.0.0", budget: 150_000, hardCeiling: 180_000 };
+  let settings: DesktopSettings = { theme: "system", startAtLogin: true, startAtLoginAvailable: true, hotkey: "Control+Alt+H", hotkeyRegistered: true, ip: "0.0.0.0", budget: 150_000, hardCeiling: 180_000, checkAppUpdates: true };
+  let skipped = "";
+  const appUpdate = (): import("../shared/api").AppUpdate => ({ enabled: settings.checkAppUpdates, current: "0.1.0", latest: "0.1.1", url: "https://github.com/evosys21/nullhost/releases/tag/v0.1.1", available: settings.checkAppUpdates && skipped !== "0.1.1", checkedAt: at });
   const status = (): Status => ({
     hostsFile: "C:\\Windows\\System32\\drivers\\etc\\hosts",
     systemFile: true,
@@ -95,6 +97,9 @@ export function createMockApi(): NullhostApi {
     ],
     schedule: async () => schedule,
     setSchedule: async (at) => { schedule = at ? { installed: true, available: true, at, nextRun: "tomorrow " + at } : { installed: false, available: true }; return done(schedule); },
+    appUpdate: async () => appUpdate(),
+    checkAppUpdate: async () => { skipped = ""; return done(appUpdate()); },
+    skipAppUpdate: async (v) => { skipped = v; return done(appUpdate()); },
     conflicts: async () => ["HostsMan (hm.exe)"],
     onChanged: (cb) => { listeners.add(cb); return () => listeners.delete(cb); },
     onProgress: (cb) => { progress.add(cb); return () => progress.delete(cb); },

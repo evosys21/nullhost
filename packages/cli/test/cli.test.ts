@@ -110,7 +110,7 @@ test("doctor, export, catalog and schedule commands", async () => {
   t.lines.length = 0;
   assert.equal(await nh("doctor"), 0);
   assert.ok(t.lines.some((l) => /\[ok {2}\] NullHost region/.test(l)), t.lines.join("\n"));
-  assert.ok(t.lines.some((l) => /Automatic updates: daily at 07:30/.test(l)));
+  assert.ok(t.lines.some((l) => /Daily list updates: daily at 07:30/.test(l)));
 
   const out = join(t.dir, "export.txt");
   assert.equal(await nh("export", "--format", "dnsmasq", "--out", out), 0);

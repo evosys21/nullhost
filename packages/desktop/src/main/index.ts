@@ -2,9 +2,9 @@ import { execFile, spawn } from "node:child_process";
 import { appendFile, mkdir, stat, writeFile } from "node:fs/promises";
 import { join, win32 } from "node:path";
 import { promisify } from "node:util";
-import { BrowserWindow, Menu, Tray, app, dialog, globalShortcut, ipcMain, nativeImage, nativeTheme, shell, type MenuItemConstructorOptions } from "electron";
+import { BrowserWindow, Menu, Notification, Tray, app, dialog, globalShortcut, ipcMain, nativeImage, nativeTheme, shell, type MenuItemConstructorOptions } from "electron";
 import { currentPlatform, defaultPaths, quoteArg, windowsScheduler, type ScheduledCommand } from "@nullhost/core";
-import { API_METHODS, CHANGED_EVENT, PROGRESS_EVENT, channel, type Theme } from "../shared/api";
+import { API_METHODS, CHANGED_EVENT, PROGRESS_EVENT, channel, type AppUpdate, type Theme } from "../shared/api";
 import { loginItemAutostart, removeLegacyLogonTask } from "./autostart";
 import { HelperBroker, runHelper, type HelperContext } from "./helper";
 import { shieldPng, type IconState } from "./icons";
@@ -160,10 +160,12 @@ function tomorrowAt(h: number, m: number): Date {
 async function trayTemplate(): Promise<MenuItemConstructorOptions[]> {
   const t = await trayState();
   const info = await service.info();
+  const update = await service.appUpdate();
   const run = (fn: () => Promise<unknown>) => () => void fn().catch((err: Error) => console.error(err.message));
   const pause = (until: Date) => run(() => service.pause(until.toISOString()));
   return [
     { label: t.label, enabled: false },
+    ...(update.available && update.url ? [{ label: `Download NullHost ${update.latest}…`, click: () => void shell.openExternal(update.url!) }] : []),
     { type: "separator" },
     {
       label: t.state === "enabled" ? "Disable blocking" : "Enable blocking",
@@ -181,7 +183,7 @@ async function trayTemplate(): Promise<MenuItemConstructorOptions[]> {
       ],
     },
     { type: "separator" },
-    { label: "Update now", enabled: info.canWrite, click: run(() => service.update()) },
+    { label: "Update lists now", enabled: info.canWrite, click: run(() => service.update()) },
     { label: "Open NullHost", click: showWindow },
     { type: "separator" },
     { label: "Quit", click: () => { quitting = true; app.quit(); } },
@@ -201,6 +203,15 @@ function createTray(): void {
   tray = new Tray(icon("enabled"));
   tray.on("click", () => (win?.isVisible() ? win.hide() : showWindow()));
   void refreshTray();
+}
+
+/** A Windows notification for a new NullHost version; clicking it opens the release page. */
+function notifyAppUpdate(u: AppUpdate): void {
+  if (!u.url || !Notification.isSupported()) return;
+  const n = new Notification({ title: `NullHost ${u.latest} is available`, body: `You have ${u.current}. Click to open the download page.`, icon: icon("enabled") });
+  const url = u.url;
+  n.on("click", () => void shell.openExternal(url));
+  n.show();
 }
 
 function registerHotkey(accelerator: string): boolean {
@@ -450,6 +461,17 @@ async function main(): Promise<void> {
     })().catch((err: Error) => console.error(err.message));
   setInterval(tick, 30_000);
   tick();
+  // new NullHost versions: the installed app asks GitHub a little after start, then once a day
+  if (app.isPackaged && !smokeDir) {
+    const updateTick = () =>
+      void (async () => {
+        await service.checkAppUpdateIfDue();
+        const u = await service.takeAppUpdateNotice();
+        if (u) notifyAppUpdate(u);
+      })().catch((err: Error) => console.error(err.message));
+    setTimeout(updateTick, 20_000);
+    setInterval(updateTick, 3 * 3600_000);
+  }
   if (smokeDir) void smoke(smokeDir);
 }
 

@@ -1,13 +1,23 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import Icon from "./Icon.vue";
-import { store } from "../store";
+import { act, api, store } from "../store";
 
-// Shared top-of-content banners: read-only mode, working on a copy, last error, last notice.
+// Shared top-of-content banners: a new NullHost version, read-only mode, working on a copy, last error, last notice.
 const copy = computed(() => store.info && !store.info.systemFile);
+const update = computed(() => (store.appUpdate?.available ? store.appUpdate : null));
+function skip(version: string) {
+  void act("Skipping", () => api.skipAppUpdate(version), () => `NullHost ${version} skipped. You'll be told about the next version.`);
+}
 </script>
 
 <template>
+  <div v-if="update" class="banner info" role="status">
+    <Icon name="info" />
+    <span style="flex: 1"><strong>NullHost {{ update.latest }} is available.</strong> You have {{ update.current }}. Download the installer and run it: it upgrades in place and keeps your settings.</span>
+    <a class="btn sm primary" :href="update.url" target="_blank" rel="noopener">Download</a>
+    <button type="button" class="btn sm" @click="skip(update.latest!)">Skip this version</button>
+  </div>
   <div v-if="store.info && !store.info.canWrite" class="banner warn">
     <Icon name="warn" /><span>{{ store.info.readOnlyReason }}</span>
   </div>

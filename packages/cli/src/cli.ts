@@ -43,7 +43,7 @@ Usage: nullhost <command> [options]
 
 Blocking
   status                          enabled/disabled, hosts, last update, warnings
-  update [--fetch-only]           download changed sources, then apply (what "Update now" does)
+  update [--fetch-only]           download changed sources, then apply (what "Update lists" does)
   apply [--dry-run] [--diff]      rebuild from the cache and write, no downloads
   enable | disable                turn blocking on or off; your own entries stay
   pause <15m|1h|1h30m|until HH:MM>

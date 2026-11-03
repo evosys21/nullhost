@@ -31,9 +31,16 @@ async function loadSchedule() {
   }
 }
 async function setSchedule(on: boolean) {
-  const r = await act(on ? "Switching on automatic updates" : "Switching off automatic updates", () => api.setSchedule(on ? scheduleAt.value : null),
-    (s) => (s.installed ? `Automatic updates on: daily at ${s.at}.` : "Automatic updates are off."));
+  const r = await act(on ? "Switching on daily list updates" : "Switching off daily list updates", () => api.setSchedule(on ? scheduleAt.value : null),
+    (s) => (s.installed ? `Daily list updates on, at ${s.at}.` : "Daily list updates are off."));
   if (r) schedule.value = r;
+}
+const appUpdate = computed(() => store.appUpdate);
+async function checkAppUpdate() {
+  await act("Checking for a new version", () => api.checkAppUpdate(), (u) =>
+    u.error ? `Could not check: ${u.error}.` :
+    u.available ? `NullHost ${u.latest} is available.` :
+    `NullHost ${u.current} is the latest version.`);
 }
 async function runChecks() {
   checks.value = (await act("Running checks", () => api.doctor())) ?? null;
@@ -66,7 +73,7 @@ async function importSettings() {
   const r = await act("Importing settings", () => api.importSettings(), (r) => (r ? imported(r) : ""));
   if (!r || !canWrite.value) return;
   if (!confirm("Settings imported. Download the lists and update the hosts file now?")) return;
-  await act("Updating", () => api.update(), (u) =>
+  await act("Updating lists", () => api.update(), (u) =>
     `${imported(r)} ${u.written ? `The hosts file was updated: ${fmt(u.hosts)} hosts blocked.` : "The hosts file already matched."}`);
 }
 async function removeRegion() {
@@ -98,6 +105,17 @@ async function removeRegion() {
           <Toggle :model-value="set.startAtLogin" label="Start at login" :disabled="!set.startAtLoginAvailable" @update:model-value="(on: boolean) => saveSetting('Saving', { startAtLogin: on }, on ? 'NullHost will start at login.' : 'NullHost will not start at login.')" />
         </div>
         <div class="f">
+          <div>Check for new NullHost versions<div class="hint">once a day, asks GitHub for the latest release; nothing is downloaded or installed by itself</div></div>
+          <Toggle :model-value="set.checkAppUpdates" label="Check for new NullHost versions" @update:model-value="(on: boolean) => saveSetting('Saving', { checkAppUpdates: on }, on ? 'NullHost will tell you when a new version is out.' : 'NullHost will not check for new versions.')" />
+        </div>
+        <div class="f">
+          <div>Version {{ info?.version }}<div class="hint" :class="{ warnc: appUpdate?.error }">{{ appUpdate?.error ? `last check failed: ${appUpdate.error}` : appUpdate?.checkedAt ? `latest ${appUpdate.latest ?? "?"}, checked ${when(appUpdate.checkedAt)}` : "not checked yet" }}</div></div>
+          <span style="display: flex; gap: 8px">
+            <a v-if="appUpdate?.url" class="btn sm primary" :href="appUpdate.url" target="_blank" rel="noopener">Download {{ appUpdate.latest }}</a>
+            <button class="btn sm" type="button" :disabled="!!store.busy" @click="checkAppUpdate">Check now</button>
+          </span>
+        </div>
+        <div class="f">
           <div>Closing the window<div class="hint">hides NullHost to the tray; Quit is in the tray menu</div></div>
           <span class="muted">always</span>
         </div>
@@ -123,10 +141,10 @@ async function removeRegion() {
       </section>
 
       <section class="card">
-        <h2 style="margin-bottom: 8px">Automatic updates</h2>
+        <h2 style="margin-bottom: 8px">Blocklist updates</h2>
         <div class="f">
-          <div>Daily update in the background<div class="hint">{{ schedule?.available ? "Task Scheduler, as you with administrator rights: runs while you are logged on, catches up after the PC was off. Switching it asks for administrator rights" : "Only in the installed NullHost app" }}</div></div>
-          <Toggle :model-value="schedule?.installed ?? false" label="Daily automatic update" :disabled="!schedule?.available || !!store.busy" @update:model-value="setSchedule" />
+          <div>Update the lists daily in the background<div class="hint">{{ schedule?.available ? "Task Scheduler, as you with administrator rights: runs while you are logged on, catches up after the PC was off. Switching it asks for administrator rights" : "Only in the installed NullHost app" }}</div></div>
+          <Toggle :model-value="schedule?.installed ?? false" label="Daily list update" :disabled="!schedule?.available || !!store.busy" @update:model-value="setSchedule" />
         </div>
         <form class="f" @submit.prevent="setSchedule(true)">
           <div>Time<div class="hint">local time; up to 10 minutes later to spread load on the list servers</div></div>
@@ -153,7 +171,7 @@ async function removeRegion() {
         <h2 style="margin-bottom: 8px">Move to another PC</h2>
         <div class="muted" style="margin-bottom: 12px">
           Export saves your lists, your own lists, the allowlist, the block address and the budget to one file. Import it on the other PC: it replaces that PC's settings,
-          keeping the old ones as <span class="mono">config.toml.before-import</span>. Appearance, hotkey, start at login and automatic updates are set on each PC.
+          keeping the old ones as <span class="mono">config.toml.before-import</span>. Appearance, hotkey, start at login, daily list updates and app update checks are set on each PC.
         </div>
         <div style="display: flex; flex-wrap: wrap; gap: 10px">
           <button class="btn" type="button" :disabled="!!store.busy" @click="exportSettings">Export settings…</button>
