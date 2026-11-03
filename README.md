@@ -1,6 +1,7 @@
 # NullHost
 
-A hosts-file ad and tracker blocker for Windows.
+A hosts-file ad and tracker blocker for Windows, and a maintained alternative
+to HostsMan.
 
 NullHost merges public blocklists into one managed region of your hosts file
 and leaves everything else in the file alone: your own entries stay exactly
@@ -38,6 +39,24 @@ the window, the tray or a hotkey.
 - **Clean-up of old blockers' leftovers** (for example HostsMan) outside the
   managed region, keeping your own entries.
 - **Command line** with the same features, and `--json` output.
+
+## How it compares
+
+NullHost works as a personal DNS filter for one PC, but without a proxy or a
+server: it uses the hosts file, which Windows already reads for every lookup.
+
+| Tool | Platform | How it blocks | Note |
+|---|---|---|---|
+| **NullHost** | Windows | Hosts file | Manages one region and leaves the rest of the file alone |
+| HostsMan | Windows | Hosts file | No longer maintained. NullHost can clean up its leftovers |
+| Hosts File Editor | Windows | Hosts file | An editor; no list downloads or updates |
+| AdAway | Android (root) | Hosts file | NullHost ships AdAway's list in its catalog |
+| personalDNSfilter | Android, Java desktop | Local DNS proxy | Runs in the background as your resolver |
+| Pi-hole, AdGuard Home | Network | DNS server | Blocks for the whole network; needs a machine to run on |
+
+They all use the same public blocklists, such as StevenBlack's hosts, so the
+choice is about where the blocking happens. NullHost suits a single Windows
+PC where you want no extra service running.
 
 ## Install (Windows)
 
@@ -215,6 +234,9 @@ node packages/desktop/scripts/sandbox-test.mjs
   reports "not elevated", so even a bug cannot write the system file.
 - While developing, don't write the real hosts file, flush DNS or restart the
   DNS Client. Use `--hosts-file`, Windows Sandbox or a VM.
+
+To report a bug, suggest a list or send a change, see
+[CONTRIBUTING.md](CONTRIBUTING.md).
 - Keep the region at 9 hosts per line. One host per line makes Windows' DNS
   Client take minutes to reload the file, stalling lookups meanwhile.
 
