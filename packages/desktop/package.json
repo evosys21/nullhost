@@ -3,6 +3,7 @@
   "productName": "NullHost",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "NullHost desktop app (Electron + Vue)",
   "main": "out/main/index.js",
   "scripts": {

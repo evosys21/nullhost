@@ -2,7 +2,7 @@
   "name": "nullhost",
   "private": true,
   "description": "NullHost: hosts-file ad and tracker blocker for Windows",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "type": "module",
   "packageManager": "yarn@4.1.1",
   "workspaces": [
