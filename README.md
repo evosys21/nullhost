@@ -7,7 +7,7 @@ and leaves everything else in the file alone: your own entries stay exactly
 where they are. Blocking can be switched on, off or paused in a second, from
 the window, the tray or a hotkey.
 
-> **Status:** early (0.1.1), Windows only. The installer and the portable exe are not code-signed,
+> **Status:** early (0.1.2), Windows only. The installer and the portable exe are not code-signed,
 > so Windows SmartScreen will warn before running it.
 
 ## Features
