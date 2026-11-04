@@ -130,13 +130,15 @@ a.btn { color: inherit; text-decoration: none; }
 /* split button: the action, and a caret that opens a menu of its variants */
 .split { display: inline-flex; }
 .split > .btn:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
-.split > .btn + .btn { border-top-left-radius: 0; border-bottom-left-radius: 0; padding: 0 10px; border-left-color: color-mix(in srgb, var(--on-accent) 35%, transparent); }
+.split > .btn + .btn { border-top-left-radius: 0; border-bottom-left-radius: 0; padding: 0 10px; margin-left: -1px; }
+.split > .btn.primary + .btn.primary { margin-left: 0; border-left-color: color-mix(in srgb, var(--on-accent) 35%, transparent); }
 .split-note { font-weight: 400; opacity: 0.85; padding-left: 8px; margin-left: 2px; border-left: 1px solid color-mix(in srgb, currentColor 35%, transparent); }
 .menu { position: fixed; z-index: 50; min-width: 220px; padding: 4px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: 0 8px 24px rgb(0 0 0 / 0.25); }
 .menu > button { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: inherit; font-size: 14px; text-align: left; cursor: pointer; }
 .menu > button:hover, .menu > button:focus-visible { background: var(--hover); outline: none; }
 .menu > button svg { width: 16px; height: 16px; color: var(--accent); }
 .menu-head { padding: 6px 10px 4px; font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.menu-sep { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 8px; }
 .menu-foot { padding: 6px 10px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--border); margin-top: 4px; }
 .switch { display: inline-flex; align-items: center; gap: 10px; border: 0; background: none; padding: 0; cursor: pointer; }
 .switch:disabled { cursor: default; opacity: 0.5; }
@@ -163,6 +165,10 @@ select.input { padding-right: 8px; }
 .banner.warn { background: var(--warn-soft); color: var(--warn-text); }
 .banner.error { background: var(--danger-soft); color: var(--danger); }
 .banner.ok { background: var(--ok-soft); color: var(--ok-text); }
+/* a banner's own close button (×), top right */
+.banner-x { display: inline-flex; align-items: center; justify-content: center; align-self: flex-start; width: 28px; height: 28px; flex: 0 0 28px; margin: -4px -6px -4px 0; border: 0; border-radius: 6px; background: none; color: inherit; opacity: 0.7; cursor: pointer; }
+.banner-x:hover, .banner-x:focus-visible { opacity: 1; background: color-mix(in srgb, currentColor 12%, transparent); outline: 2px solid transparent; }
+.banner .banner-x svg { width: 14px; height: 14px; flex: 0 0 14px; }
 .tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 7px; border-radius: 5px; background: var(--hover); color: var(--text-2); white-space: nowrap; }
 .tag.warn { background: var(--warn-soft); color: var(--warn-text); }
 .chg { color: var(--accent-hover); font-weight: 600; font-size: 12px; }
@@ -184,7 +190,25 @@ tr.tier td { background: var(--bg); font-weight: 600; font-size: 13px; color: va
 .okc { color: var(--ok); font-weight: 600; }
 .warnc { color: var(--warn); font-weight: 600; }
 
-.busy { position: fixed; right: 20px; bottom: 20px; background: var(--toast); color: var(--toast-text); padding: 10px 16px; border-radius: 8px; font-size: 13px; display: flex; gap: 10px; align-items: center; }
+/* bottom right: the busy indicator and the notice toast, stacked */
+.toasts { position: fixed; right: 20px; bottom: 20px; z-index: 60; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; pointer-events: none; }
+.toasts > * { pointer-events: auto; }
+.busy { background: var(--toast); color: var(--toast-text); padding: 10px 16px; border-radius: 8px; font-size: 13px; display: flex; gap: 10px; align-items: center; }
+.toast { display: flex; align-items: center; gap: 10px; max-width: min(460px, calc(100vw - 40px)); padding: 10px 8px 10px 14px; border-radius: 8px; background: var(--toast); color: var(--toast-text); font-size: 13px; box-shadow: 0 8px 24px rgb(0 0 0 / 0.25); }
+.toast > svg { width: 16px; height: 16px; flex: 0 0 16px; color: var(--ok); }
+.toast-text { flex: 1; line-height: 1.4; }
+.toast-x { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: 0 0 28px; border: 0; border-radius: 6px; background: none; color: inherit; opacity: 0.7; cursor: pointer; }
+.toast-x:hover, .toast-x:focus-visible { opacity: 1; background: color-mix(in srgb, currentColor 12%, transparent); outline: none; }
+.toast-x svg { width: 14px; height: 14px; }
+.toast-stack { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+/* in: a quick slide up. out: melts away in place (a slow fade and a slight shrink); it keeps
+   its space meanwhile, so its text doesn't reflow, and the stack is anchored at the bottom, so
+   the oldest (top) toast leaving moves nothing; others close a gap smoothly (.toast-move) */
+.toast-enter-active, .toast-move { transition: opacity 0.2s, transform 0.2s; }
+.toast-enter-from { opacity: 0; transform: translateY(8px); }
+.toast-leave-active { transition: opacity 0.7s ease-in, transform 0.7s ease-in; }
+.toast-leave-to { opacity: 0; transform: scale(0.97); }
+@media (prefers-reduced-motion: reduce) { .toast-enter-active, .toast-leave-active, .toast-move { transition: none; } }
 .busy-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .busy-step { opacity: 0.75; font-size: 12px; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .spinner { width: 14px; height: 14px; border: 2px solid color-mix(in srgb, currentColor 35%, transparent); border-top-color: currentColor; border-radius: 50%; animation: spin 0.8s linear infinite; }

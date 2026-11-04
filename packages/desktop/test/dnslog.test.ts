@@ -131,7 +131,6 @@ test("a log NullHost has no record of: never switched off automatically, but Sto
   try {
     const v = await t.svc.dnsLog();
     assert.deepEqual([v.enabled, v.ours], [true, false]);
-    await assert.rejects(t.svc.setDnsLog("enable"), /outside NullHost/);
     await t.svc.elevate();
     await t.svc.stopDnsLogOnQuit();
     assert.equal(await t.svc.stopDnsLogIfDue(Date.now() + 24 * 60 * MIN), false);
@@ -140,6 +139,20 @@ test("a log NullHost has no record of: never switched off automatically, but Sto
 
     await t.svc.setDnsLog("disable");
     assert.deepEqual(t.requests, [["dnslog", { action: "disable" }]]);
+    assert.equal(t.log.enabled, false);
+  } finally {
+    await t.done();
+  }
+});
+
+test("Keep logging for: a time limit makes a log NullHost has no record of its own, without a prompt", async () => {
+  const t = await service({ enabled: true });
+  try {
+    const v = await t.svc.setDnsLog("enable", 15);
+    assert.deepEqual([v.enabled, v.ours], [true, true]);
+    assert.deepEqual(t.requests, [], "already on: nothing switched, no administrator rights asked");
+    await t.svc.elevate(); // the automatic stop never prompts; with the helper running it goes through
+    assert.equal(await t.svc.stopDnsLogIfDue(Date.now() + 16 * MIN), true, "switched off when its time is up");
     assert.equal(t.log.enabled, false);
   } finally {
     await t.done();

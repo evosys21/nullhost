@@ -22,9 +22,30 @@ export const store = reactive({
   /** the step of `busy` running right now, from the main process ("Downloading AdAway (2 of 3)") */
   step: "",
   error: "",
-  notice: "",
+  /** success messages, shown as toasts bottom right (oldest first); each goes away by itself */
+  toasts: [] as Array<{ id: number; text: string }>,
   lastResult: null as ApplySummary | null,
+  /** the DNS log tab's how-it-works note was closed; in memory only, so it is back after a restart */
+  dnsLogIntroClosed: false,
 });
+
+/** at most this many toasts at once; a new one pushes out the oldest */
+const MAX_TOASTS = 4;
+let toastId = 0;
+
+/** Show a success message as a toast. Messages stack; none replaces another. */
+export function notify(text: string): void {
+  const same = store.toasts.findIndex((t) => t.text === text);
+  // the same message again restarts it instead of stacking a copy
+  if (same >= 0) store.toasts.splice(same, 1);
+  store.toasts.push({ id: ++toastId, text });
+  if (store.toasts.length > MAX_TOASTS) store.toasts.splice(0, store.toasts.length - MAX_TOASTS);
+}
+
+export function dismissToast(id: number): void {
+  const i = store.toasts.findIndex((t) => t.id === id);
+  if (i >= 0) store.toasts.splice(i, 1);
+}
 
 /** "Error invoking remote method 'nullhost:x': Error: message" -> "message" */
 export function cleanError(err: unknown): string {
@@ -48,15 +69,14 @@ export async function refresh(): Promise<void> {
   }
 }
 
-/** Run an action with the busy indicator; errors land in store.error, success can set a notice. */
+/** Run an action with the busy indicator; errors land in store.error, success can add a toast. */
 export async function act<T>(label: string, fn: () => Promise<T>, notice?: (r: T) => string): Promise<T | undefined> {
   store.busy = label;
   store.step = "";
   store.error = "";
-  store.notice = "";
   try {
     const r = await fn();
-    if (notice) store.notice = notice(r);
+    if (notice) notify(notice(r));
     await refresh();
     return r;
   } catch (err) {

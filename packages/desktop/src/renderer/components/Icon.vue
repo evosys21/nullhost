@@ -13,6 +13,7 @@ export const PATHS = {
   sliders: ["M4 7h10M18 7h2M4 17h2M10 17h10", "M16 5v4M8 15v4"],
   activity: ["M3 12h4l3-8 4 16 3-8h4"],
   chevron: ["M6 9l6 6 6-6"],
+  stop: ["M7 7h10v10H7z"],
   refresh: ["M20 12a8 8 0 1 1-2.3-5.7", "M20 4v5h-5"],
   check: ["M5 12l5 5L20 7"],
   pause: ["M8 5v14M16 5v14"],

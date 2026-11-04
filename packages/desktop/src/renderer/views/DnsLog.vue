@@ -118,10 +118,17 @@ async function startFor(m: number) {
   minutes.value = m;
   await setLog("enable");
 }
+async function stopNow() {
+  menuOpen.value = false;
+  await setLog("disable");
+}
 
 async function setLog(action: "enable" | "disable" | "clear") {
-  const label = action === "enable" ? "Starting the DNS log" : action === "disable" ? "Stopping the DNS log" : "Clearing the DNS log";
-  const notice = action === "enable" ? `Logging lookups for ${minutesLabel(minutes.value)}. New ones appear below as they happen.` : action === "disable" ? "Stopped logging. What was logged stays until you clear it." : "The DNS log is empty.";
+  const running = view.value?.enabled ?? false;
+  const label = action === "enable" ? (running ? "Setting the logging time" : "Starting the DNS log") : action === "disable" ? "Stopping the DNS log" : "Clearing the DNS log";
+  const notice = action === "enable"
+    ? running ? `Logging for ${minutesLabel(minutes.value)} from now, then NullHost switches it off.` : `Logging lookups for ${minutesLabel(minutes.value)}. New ones appear below as they happen.`
+    : action === "disable" ? "Stopped logging. What was logged stays until you clear it." : "The DNS log is empty.";
   const v = await act(label, () => api.setDnsLog(action, minutes.value), () => notice);
   if (!v) return;
   view.value = { ...v, entries: [] };
@@ -178,19 +185,30 @@ function detail(r: DnsLogEntry): string {
       <div class="sub">Every name this PC looks up, from Windows' DNS Client log, and whether NullHost blocked it.</div>
     </div>
     <template v-if="view?.available">
-      <button v-if="view.enabled" class="btn" type="button" :disabled="!view.canSwitch || !!store.busy" @click="setLog('disable')"><Icon name="pause" />Stop logging</button>
-      <div v-else-if="!view.enabled" class="split">
-        <button class="btn primary" type="button" :disabled="!view.canSwitch || !!store.busy" :title="view.admin ? `Logs for ${minutesLabel(minutes)}, then switches the log off` : 'Asks for administrator rights'" @click="setLog('enable')">
+      <!-- one split button: start (for a time) while off; stop, or keep logging longer, while on -->
+      <div class="split">
+        <button v-if="view.enabled" class="btn" type="button" :disabled="!view.canSwitch || !!store.busy" :title="view.admin ? undefined : 'Asks for administrator rights'" @click="setLog('disable')">
+          <Icon :name="view.admin ? 'stop' : 'shield'" />Stop logging<span class="split-note">{{ view.ours ? `${left} left` : "no time limit" }}</span>
+        </button>
+        <button v-else class="btn primary" type="button" :disabled="!view.canSwitch || !!store.busy" :title="view.admin ? `Logs for ${minutesLabel(minutes)}, then switches the log off` : 'Asks for administrator rights'" @click="setLog('enable')">
           <Icon :name="view.admin ? 'play' : 'shield'" />Start logging<span class="split-note">{{ shortLabel(minutes) }}</span>
         </button>
-        <button ref="caret" class="btn primary" type="button" aria-haspopup="menu" :aria-expanded="menuOpen" aria-label="Choose how long to log" :disabled="!view.canSwitch || !!store.busy" @click="toggleMenu"><Icon name="chevron" /></button>
+        <button ref="caret" class="btn" :class="{ primary: !view.enabled }" type="button" aria-haspopup="menu" :aria-expanded="menuOpen" :aria-label="view.enabled ? 'Stop, or keep logging longer' : 'Choose how long to log'" :disabled="!view.canSwitch || !!store.busy" @click="toggleMenu"><Icon name="chevron" /></button>
       </div>
-      <div v-if="menuOpen" class="menu" role="menu" aria-label="Log for" :style="menuPos" @keydown.esc="menuOpen = false">
-        <div class="menu-head">Log for</div>
-        <button v-for="m in DNS_LOG_MINUTES" :key="m" type="button" role="menuitemradio" :aria-checked="m === minutes" @click="startFor(m)">
-          <span style="flex: 1">{{ minutesLabel(m) }}</span><Icon v-if="m === minutes" name="check" />
-        </button>
-        <div class="menu-foot">Then NullHost switches the log off again.</div>
+      <div v-if="menuOpen" class="menu" role="menu" :aria-label="view.enabled ? 'DNS log' : 'Log for'" :style="menuPos">
+        <template v-if="view.enabled">
+          <button type="button" role="menuitem" @click="stopNow"><Icon name="stop" /><span style="flex: 1">Stop logging now</span></button>
+          <div class="menu-head menu-sep">Keep logging for</div>
+          <button v-for="m in DNS_LOG_MINUTES" :key="m" type="button" role="menuitem" @click="startFor(m)"><span style="flex: 1">{{ minutesLabel(m) }} from now</span></button>
+          <div class="menu-foot">{{ view.ours ? `Now until ${untilTime}.` : "Gives this log a time limit: NullHost then switches it off." }}</div>
+        </template>
+        <template v-else>
+          <div class="menu-head">Log for</div>
+          <button v-for="m in DNS_LOG_MINUTES" :key="m" type="button" role="menuitemradio" :aria-checked="m === minutes" @click="startFor(m)">
+            <span style="flex: 1">{{ minutesLabel(m) }}</span><Icon v-if="m === minutes" name="check" />
+          </button>
+          <div class="menu-foot">Then NullHost switches the log off again.</div>
+        </template>
       </div>
     </template>
   </header>
@@ -202,20 +220,23 @@ function detail(r: DnsLogEntry): string {
     <div v-if="!view && !readError" class="banner info" role="status"><span class="spinner"></span><span>Reading the DNS log…</span></div>
     <div v-if="view && !view.available" class="banner warn"><Icon name="info" /><span>The DNS Client log can't be read here. It is a Windows feature.</span></div>
     <template v-else-if="view">
-      <div v-if="!view.enabled" class="banner info">
+      <!-- the how-it-works note: closable, and stays closed until NullHost restarts -->
+      <div v-if="!view.enabled && !store.dnsLogIntroClosed" class="banner info">
         <Icon name="info" />
         <span style="flex: 1">
           Windows doesn't log lookups by default. <strong>Start logging</strong> switches the log on for the time you pick; NullHost switches it off again then, or when you quit it.
           While it's on, the names this PC looks up are recorded in the Windows event log, where other administrators and signed-in users of this PC can read them.
         </span>
+        <button type="button" class="banner-x" aria-label="Close" title="Close" @click="store.dnsLogIntroClosed = true"><Icon name="x" /></button>
       </div>
-      <div v-else-if="view.overdue" class="banner warn" role="status">
+      <!-- while logging: overdue, NullHost's own (with its time), or one it has no record of -->
+      <div v-if="view.enabled && view.overdue" class="banner warn" role="status">
         <Icon name="warn" />
         <span style="flex: 1">The logging time ended at {{ untilTime }}, but the log is still on: switching it off needs administrator rights, which NullHost doesn't have right now.</span>
         <button class="btn sm" type="button" :disabled="!!store.busy" @click="setLog('disable')"><Icon name="shield" />Switch it off</button>
       </div>
-      <div v-else-if="view.ours" class="banner ok" role="status"><span class="dot"></span><span style="flex: 1">Logging until {{ untilTime }} ({{ left }} left). NullHost switches it off then, or when you quit it. Clear removes what was recorded.</span></div>
-      <div v-else class="banner warn" role="status">
+      <div v-else-if="view.enabled && view.ours" class="banner ok" role="status"><span class="dot"></span><span style="flex: 1">Logging until {{ untilTime }} ({{ left }} left). NullHost switches it off then, or when you quit it. Clear removes what was recorded.</span></div>
+      <div v-else-if="view.enabled" class="banner warn" role="status">
         <Icon name="info" />
         <span style="flex: 1">Logging is on, with no time limit: NullHost has no record of switching it on (another program did, or a NullHost that quit without switching it off). NullHost won't switch it off by itself; <strong>Stop logging</strong> does it now.</span>
       </div>
@@ -249,7 +270,7 @@ function detail(r: DnsLogEntry): string {
               <td class="mono" style="min-width: 240px; overflow-wrap: anywhere">{{ r.name }}</td>
               <td class="mono muted">{{ r.typeName }}</td>
               <td><span class="tag" :style="STYLES[r.verdict]">{{ LABELS[r.verdict] }}</span></td>
-              <td class="muted" style="font-size: 13px; word-break: break-word">{{ detail(r) }}</td>
+              <td class="muted" style="font-size: 13px; min-width: 200px; overflow-wrap: anywhere">{{ detail(r) }}</td>
               <td class="mono muted" style="white-space: nowrap" :title="r.pid ? `process ${r.pid}` : undefined">{{ r.process ?? (r.pid ? `pid ${r.pid}` : "") }}</td>
               <td><button v-if="r.verdict === 'blocked'" class="btn sm" type="button" :disabled="!store.info?.canWrite || !!store.busy" @click="allow(r.name)">Allow</button></td>
             </tr>

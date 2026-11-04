@@ -685,7 +685,8 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
   }
 
   /**
-   * enable: on for `minutes`, then NullHost switches it off again. disable: Stop logging, the
+   * enable: on for `minutes` from now, then NullHost switches it off again (already on: only the
+   * time is set, and a log NullHost has no record of becomes its own). disable: Stop logging, the
    * user's own choice, so it works on any log (only the automatic stops are limited to NullHost's
    * own). clear: empty it.
    * Returns the state only: the tab keeps reading from where it was (from the start after a clear).
@@ -694,10 +695,12 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
     const log = this.o.dnsLog;
     if (!log) throw new Error("The DNS log is a Windows feature.");
     const before = await log.reader.state();
-    const ours = await this.ownDnsLog(before?.enabled ?? false);
+    // forgets a record of a log that was switched off elsewhere meanwhile
+    await this.ownDnsLog(before?.enabled ?? false);
     if (action === "enable") {
       if (!(DNS_LOG_MINUTES as readonly number[]).includes(minutes)) throw new Error(`Logging runs for ${DNS_LOG_MINUTES.join(", ")} minutes.`);
-      if (before?.enabled && !ours) throw new Error("The DNS log was switched on outside NullHost, so NullHost leaves it as it is.");
+      // already on without a record (another program, or an older NullHost): giving it a time is the
+      // user's choice, so from now on it is NullHost's and is switched off when the time is up
       const until = new Date(Date.now() + minutes * 60_000).toISOString();
       // recorded first: if NullHost stops between switching the log on and recording it, it is still NullHost's
       this.dnsLogSwitching = true;
