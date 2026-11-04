@@ -3,7 +3,7 @@ import { computed } from "vue";
 import Icon from "./Icon.vue";
 import { act, api, installAppUpdate, store } from "../store";
 
-// Shared top-of-content banners: a new NullHost version, read-only mode, working on a copy, last error, last notice.
+// Shared top-of-content banners: a new NullHost version, read-only mode, working on a copy, last error (notices are toasts: Toast.vue).
 const copy = computed(() => store.info && !store.info.systemFile);
 const update = computed(() => (store.appUpdate?.available ? store.appUpdate : null));
 function skip(version: string) {
@@ -29,9 +29,5 @@ function skip(version: string) {
   <div v-if="store.error" class="banner error" role="alert">
     <Icon name="warn" /><span style="flex: 1">{{ store.error }}</span>
     <button type="button" class="btn sm" @click="store.error = ''">Dismiss</button>
-  </div>
-  <div v-if="store.notice" class="banner ok" role="status">
-    <Icon name="check" /><span style="flex: 1">{{ store.notice }}</span>
-    <button type="button" class="btn sm" @click="store.notice = ''">Dismiss</button>
   </div>
 </template>

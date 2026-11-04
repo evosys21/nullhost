@@ -9,6 +9,7 @@ import {
   OverCeilingError,
   RegionMarkersError,
   SourcesUnavailableError,
+  classify,
   extractRegion,
   pathsIn,
   readHostsFile,
@@ -399,4 +400,23 @@ test("settings export and import: a round trip to another PC; bad files change n
   await assert.rejects(b.engine.importConfig("budget = 999999"), /budget/);
   await assert.rejects(b.engine.importConfig('allowlist = ["/([/"]'), /allowlist/);
   assert.equal(await b.engine.exportConfig(), now);
+});
+
+test("blockIndex agrees with check, for the DNS log", async () => {
+  const h = await harness();
+  await h.engine.apply();
+  await h.engine.allowAdd("cdn.segment.com");
+  tick(h);
+  await h.engine.apply();
+  const idx = await h.engine.blockIndex();
+  const e = (name: string) => ({ record: 1, time: "", pid: 1, name, type: 1, status: 0, results: ["1.2.3.4"] });
+  const ads = classify(e("ads.example.com"), idx);
+  assert.equal(ads.verdict, "blocked");
+  assert.deepEqual(ads.listedBy, ["List A", "List B"]);
+  const seg = classify(e("cdn.segment.com"), idx);
+  assert.equal(seg.verdict, "allowed");
+  assert.deepEqual(seg.listedBy, ["List A"]);
+  assert.equal(seg.allowedBy, "cdn.segment.com");
+  assert.equal(classify(e("my-own-block.example.com"), idx).verdict, "own");
+  assert.equal(classify(e("example.org"), idx).verdict, "resolved");
 });

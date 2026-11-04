@@ -4,7 +4,7 @@ import type { Check, ImportSummary, ScheduleStatus, Theme } from "../../shared/a
 import Banners from "../components/Banners.vue";
 import Icon from "../components/Icon.vue";
 import Toggle from "../components/Toggle.vue";
-import { act, api, cleanError, fmt, installAppUpdate, store } from "../store";
+import { act, api, cleanError, fmt, installAppUpdate, notify, store } from "../store";
 
 const set = computed(() => store.settings);
 const info = computed(() => store.info);
@@ -55,7 +55,7 @@ onMounted(async () => {
 async function copyReport() {
   const report = { info: info.value, status: st.value, settings: set.value, schedule: schedule.value, checks: checks.value };
   await navigator.clipboard.writeText(JSON.stringify(report, null, 2));
-  store.notice = "Report copied to the clipboard.";
+  notify("Report copied to the clipboard.");
 }
 async function restore(which: "previous" | "original") {
   const msg = which === "original"

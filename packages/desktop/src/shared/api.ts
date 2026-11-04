@@ -1,8 +1,8 @@
 // The contract between the renderer (UI) and the main process. The preload script
 // exposes exactly these methods as `window.nullhost`; each is one IPC channel.
-import type { AllowText, Blocking, Check, CheckResult, Diff, ScheduleStatus, SourceFormat, SourceRun, Status, Tier } from "@nullhost/core";
+import type { AllowText, Blocking, Check, CheckResult, Diff, DnsLogAction, DnsLogEntry, DnsVerdict, ScheduleStatus, SourceFormat, SourceRun, Status, Tier } from "@nullhost/core";
 
-export type { AllowText, Blocking, Check, CheckResult, Diff, ScheduleStatus, SourceRun, Status };
+export type { AllowText, Blocking, Check, CheckResult, Diff, DnsLogAction, DnsLogEntry, DnsVerdict, ScheduleStatus, SourceRun, Status };
 
 export interface AppInfo {
   version: string;
@@ -105,6 +105,35 @@ export interface AppUpdate {
   canInstall: boolean;
 }
 
+/** Windows' DNS Client log, read after a record number (DNS log tab) */
+export interface DnsLogView {
+  /** the log exists and can be read here (Windows) */
+  available: boolean;
+  /** Windows is writing lookups to it */
+  enabled: boolean;
+  /** this process may switch it (as admin, or through the helper) */
+  canSwitch: boolean;
+  /** administrator rights are already there (admin, or the helper running): switching asks nothing */
+  admin: boolean;
+  /** NullHost switched the log on, so it switches it off again; a log switched on elsewhere is left alone */
+  ours: boolean;
+  /** when NullHost switches its log off (ISO), while `ours` */
+  until?: string;
+  /** that time has passed but the log is still on: switching it off needs a click (administrator rights) */
+  overdue: boolean;
+  /** new lookups after the record asked for, oldest first */
+  entries: DnsLogEntry[];
+  /** pass this as `after` next time */
+  last: number;
+  /** the log was cleared outside NullHost: `entries` start over, drop the rows shown so far */
+  reset?: boolean;
+  /** reading failed (shown in the tab) */
+  error?: string;
+}
+
+/** how long Start logging runs before NullHost switches the log off again */
+export const DNS_LOG_MINUTES = [5, 15, 30, 60] as const;
+
 /** what Import settings brought in */
 export interface ImportSummary {
   file: string;
@@ -166,6 +195,12 @@ export interface NullhostApi {
   installAppUpdate(): Promise<void>;
   /** other hosts-file tools running right now, e.g. "HostsMan (hm.exe)" */
   conflicts(): Promise<string[]>;
+  /** lookups the DNS Client logged after record `after` (0: the newest few hundred), each marked blocked or not */
+  dnsLog(after?: number): Promise<DnsLogView>;
+  /** switch the DNS Client log on for `minutes` (one of DNS_LOG_MINUTES) or off, or clear it (asks for administrator rights) */
+  setDnsLog(action: DnsLogAction, minutes?: number): Promise<DnsLogView>;
+  /** "Run as administrator": start the elevated helper now (one UAC prompt), changing nothing */
+  elevate(): Promise<void>;
   /** called after anything changed (any window, the tray, the hotkey, the pause timer) */
   onChanged(cb: () => void): () => void;
   /** each step of a running operation, in words ("Downloading AdAway (2 of 3)") */
@@ -210,6 +245,9 @@ export const API_METHODS = [
   "skipAppUpdate",
   "installAppUpdate",
   "conflicts",
+  "dnsLog",
+  "setDnsLog",
+  "elevate",
 ] as const satisfies ReadonlyArray<Exclude<keyof NullhostApi, "onChanged" | "onProgress">>;
 
 export type ApiMethod = (typeof API_METHODS)[number];

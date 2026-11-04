@@ -1,7 +1,7 @@
 // In-memory stand-in for the main process, used only when the UI runs in a plain
 // browser (`yarn dev:web`) for review. Nothing here touches a file.
 import { parseAllowText } from "@nullhost/core/allowtext";
-import type { ApplySummary, DesktopSettings, NullhostApi, SourceView, Status } from "../shared/api";
+import type { ApplySummary, DesktopSettings, DnsLogEntry, DnsLogView, NullhostApi, SourceView, Status } from "../shared/api";
 
 export function createMockApi(): NullhostApi {
   const listeners = new Set<() => void>();
@@ -46,6 +46,35 @@ export function createMockApi(): NullhostApi {
   });
   const summary = (): ApplySummary => ({ mode, hosts: 74_862, lines: 8_319, diff: { added: 312, removed: 41, sampleAdded: [], sampleRemoved: [] }, written: true, pending: false, dryRun: false, warnings: [], runs: {} });
   const done = async <T>(v: T) => { await new Promise((r) => setTimeout(r, 250)); changed(); return v; };
+  // the DNS log: a few made-up lookups per read while it is on
+  let dnsOn = false;
+  let record = 0;
+  const LOOKUPS: Array<[string, string, DnsLogEntry["verdict"], string[]?, string?]> = [
+    ["www.google.com", "chrome.exe", "resolved"],
+    ["ad.doubleclick.net", "chrome.exe", "blocked", ["StevenBlack unified", "AdAway official"]],
+    ["a.adroll.com", "chrome.exe", "blocked", ["StevenBlack unified"]],
+    ["cdn.segment.com", "Code.exe", "allowed", ["StevenBlack unified"], "cdn.segment.com"],
+    ["github.com", "Code.exe", "resolved"],
+    ["alma.local", "firefox.exe", "own"],
+    ["settings-win.data.microsoft.com", "svchost.exe", "resolved"],
+    ["login.live.com", "OneDrive.exe", "resolved"],
+    ["typo.invalid", "chrome.exe", "failed"],
+    ["browser.events.data.msn.com", "msedge.exe", "blocked", ["StevenBlack unified"]],
+  ];
+  const lookup = (): DnsLogEntry => {
+    const [name, process, verdict, listedBy, allowedBy] = LOOKUPS[Math.floor(Math.random() * LOOKUPS.length)]!;
+    const aaaa = Math.random() < 0.3;
+    const failed = verdict === "failed";
+    const results = verdict === "blocked" || verdict === "own" ? (aaaa ? [] : ["0.0.0.0"]) : failed ? [] : aaaa ? ["2a00:1450:4001:82b::2004"] : ["142.250.185.68"];
+    const status = failed ? 9003 : results.length ? 0 : 9501;
+    return { record: ++record, time: new Date().toISOString(), pid: 4242, name, type: aaaa ? 28 : 1, typeName: aaaa ? "AAAA" : "A", status, statusText: status ? (failed ? "no such name" : "no records of this type") : undefined, results, verdict, listedBy, allowedBy, process };
+  };
+  let admin = false;
+  let dnsUntil: string | undefined;
+  const dnsView = (entries: DnsLogEntry[] = []): DnsLogView => {
+    if (dnsUntil && Date.parse(dnsUntil) <= Date.now() && admin) { dnsOn = false; dnsUntil = undefined; }
+    return { available: true, enabled: dnsOn, canSwitch: true, admin, ours: dnsUntil !== undefined, until: dnsUntil, overdue: dnsUntil !== undefined && Date.parse(dnsUntil) <= Date.now(), entries, last: record };
+  };
   return {
     info: async () => ({ version: "0.1.0", platform: "windows", hostsFile: "C:\\Windows\\System32\\drivers\\etc\\hosts", systemFile: true, elevated: false, writer: "helper", helperRunning: false, pauseEnded: false, canWrite: true, dataDir: "%LOCALAPPDATA%\\NullHost", configFile: "%APPDATA%\\NullHost\\config.toml", dev: true, portable: false }),
     status: async () => status(),
@@ -102,6 +131,17 @@ export function createMockApi(): NullhostApi {
     skipAppUpdate: async (v) => { skipped = v; return done(appUpdate()); },
     installAppUpdate: async () => { throw new Error("The preview cannot install anything."); },
     conflicts: async () => ["HostsMan (hm.exe)"],
+    dnsLog: async (after = 0) => dnsView(dnsOn ? Array.from({ length: after ? Math.floor(Math.random() * 4) : 40 }, lookup) : []),
+    setDnsLog: async (action, minutes = 5) => {
+      admin = true;
+      if (action === "clear") record = 0;
+      else {
+        dnsOn = action === "enable";
+        dnsUntil = dnsOn ? new Date(Date.now() + minutes * 60_000).toISOString() : undefined;
+      }
+      return done(dnsView());
+    },
+    elevate: async () => { admin = true; return done(undefined); },
     onChanged: (cb) => { listeners.add(cb); return () => listeners.delete(cb); },
     onProgress: (cb) => { progress.add(cb); return () => progress.delete(cb); },
   };

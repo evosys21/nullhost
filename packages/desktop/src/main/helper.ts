@@ -10,17 +10,18 @@
 //   write     replace the SYSTEM hosts file with the given text (path fixed here)
 //   flush     ipconfig /flushdns
 //   schedule  install or remove the daily-update task
+//   dnslog    switch Windows' DNS Client log on or off, or clear it
 //   ping
 import { randomBytes, randomUUID } from "node:crypto";
 import { win32 } from "node:path";
 import net from "node:net";
-import type { ScheduleStatus, WriteReport } from "@nullhost/core";
+import type { DnsLogAction, ScheduleStatus, WriteReport } from "@nullhost/core";
 
 export const PIPE_PREFIX = "\\\\.\\pipe\\nullhost-";
 /** larger than any hosts file under the 180k-host ceiling (about 7 MB) */
 export const MAX_CONTENT = 32 * 1024 * 1024;
 
-export type HelperOp = "ping" | "write" | "flush" | "schedule";
+export type HelperOp = "ping" | "write" | "flush" | "schedule" | "dnslog";
 
 export interface HelperRequest {
   id: number;
@@ -30,6 +31,7 @@ export interface HelperRequest {
   dataDir?: string;
   configFile?: string;
   hostsFile?: string;
+  action?: DnsLogAction;
 }
 
 export type HelperResponse = { id: number; ok: true; result?: unknown } | { id: number; ok: false; error: string };
@@ -47,9 +49,14 @@ export interface HelperContext {
   write(path: string, content: string): Promise<WriteReport>;
   flush(): Promise<void>;
   schedule(at: string | null, paths: { dataDir: string; configFile: string; hostsFile?: string }): Promise<ScheduleStatus>;
+  /** the DNS Client log only: on, off or clear, nothing else about it */
+  dnsLog(action: DnsLogAction): Promise<void>;
+  /** started for an app that works on a copy: only ping and dnslog; it never writes the system hosts file */
+  dnsLogOnly?: boolean;
 }
 
 const TIME = /^([01]?\d|2[0-3]):[0-5]\d$/;
+const DNS_LOG_ACTIONS: readonly unknown[] = ["enable", "disable", "clear"] satisfies DnsLogAction[];
 
 function safePath(v: unknown, what: string): string {
   if (typeof v !== "string" || v.length === 0 || v.length > 260 || !win32.isAbsolute(v) || /["\u0000-\u001f]/.test(v)) {
@@ -62,6 +69,7 @@ function safePath(v: unknown, what: string): string {
 export async function handleHelperRequest(raw: unknown, ctx: HelperContext): Promise<unknown> {
   if (!raw || typeof raw !== "object") throw new Error("bad request");
   const req = raw as Partial<HelperRequest>;
+  if (ctx.dnsLogOnly && req.op !== "ping" && req.op !== "dnslog") throw new Error(`this helper only switches the DNS log, not ${String(req.op)}`);
   switch (req.op) {
     case "ping":
       return { pid: process.pid, elevated: ctx.elevated };
@@ -83,6 +91,10 @@ export async function handleHelperRequest(raw: unknown, ctx: HelperContext): Pro
       }
       return ctx.schedule(req.at ?? null, paths);
     }
+    case "dnslog":
+      if (!DNS_LOG_ACTIONS.includes(req.action)) throw new Error("dnslog action must be enable, disable or clear");
+      await ctx.dnsLog(req.action!);
+      return null;
     default:
       throw new Error(`unknown request: ${String(req.op)}`);
   }

@@ -5,7 +5,7 @@ import { appendFile, mkdir, readFile, rm, stat, writeFile } from "node:fs/promis
 import { dirname, join, win32 } from "node:path";
 import { promisify } from "node:util";
 import { BrowserWindow, Menu, Notification, Tray, app, dialog, globalShortcut, ipcMain, nativeImage, nativeTheme, shell, type MenuItemConstructorOptions } from "electron";
-import { currentPlatform, defaultPaths, quoteArg, windowsScheduler, type ScheduledCommand } from "@nullhost/core";
+import { currentPlatform, defaultPaths, quoteArg, setDnsLog, windowsDnsLog, windowsScheduler, type ScheduledCommand } from "@nullhost/core";
 import { API_METHODS, CHANGED_EVENT, PROGRESS_EVENT, channel, type AppUpdate, type Theme } from "../shared/api";
 import { loginItemAutostart, removeLegacyLogonTask } from "./autostart";
 import { HelperBroker, runHelper, type HelperContext } from "./helper";
@@ -334,18 +334,22 @@ function helperArgs(pipe: string, token: string, extra: string[] = []): string[]
   return [...(app.isPackaged ? [] : [app.getAppPath()]), "--helper", "--pipe", pipe, "--token", token, "--parent", String(process.pid), ...extra];
 }
 
-/** Start the helper: elevated with one UAC prompt, or (tests on a copy) unelevated without one. */
-async function launchHelper(pipe: string, token: string): Promise<void> {
+/**
+ * Start the helper: elevated with one UAC prompt, or (tests on a copy) unelevated without one.
+ * `dnsLogOnly`: for an app working on a copy, a helper that refuses everything but the DNS log.
+ */
+async function launchHelper(pipe: string, token: string, dnsLogOnly = false): Promise<void> {
+  const only = dnsLogOnly ? ["--dnslog-only"] : [];
   if (forceHelper) {
-    spawn(process.execPath, helperArgs(pipe, token, ["--hosts-file", hostsFileArg!]), { stdio: "ignore", windowsHide: true }).unref();
+    spawn(process.execPath, helperArgs(pipe, token, ["--hosts-file", hostsFileArg!, ...only]), { stdio: "ignore", windowsHide: true }).unref();
     return;
   }
-  const argLine = helperArgs(pipe, token).map(quoteArg).join(" ");
+  const argLine = helperArgs(pipe, token, only).map(quoteArg).join(" ");
   const script = `Start-Process -FilePath ${psQuote(process.execPath)} -ArgumentList ${psQuote(argLine)} -Verb RunAs -WindowStyle Hidden`;
   try {
     await runAsync("powershell", ["-NoProfile", "-NonInteractive", "-Command", script], { windowsHide: true, timeout: 180_000 });
   } catch {
-    throw new Error("Administrator rights were not granted, so the hosts file was not changed.");
+    throw new Error(dnsLogOnly ? "Administrator rights were not granted, so the DNS log was not changed." : "Administrator rights were not granted, so the hosts file was not changed.");
   }
 }
 
@@ -372,6 +376,8 @@ async function helperMain(): Promise<void> {
       else await s.install(await scheduledCommand(at, paths));
       return s.status();
     },
+    dnsLog: (action) => setDnsLog(action),
+    dnsLogOnly: process.argv.includes("--dnslog-only"),
   };
   const code = await runHelper({ pipe: argValue("--pipe") ?? "", token: argValue("--token") ?? "", parentPid: Number(argValue("--parent")) || undefined, ctx });
   app.exit(code);
@@ -470,9 +476,10 @@ function createService(): Promise<Service> {
     openPath: async (p) => { await mkdir(p, { recursive: true }); await shell.openPath(p); },
     chooseFile: { save: saveDialog, open: openDialog },
     makeBroker: process.platform === "win32"
-      ? () => new HelperBroker({ launch: launchHelper, onState: () => service?.helperStateChanged() })
+      ? (o) => new HelperBroker({ launch: (pipe, token) => launchHelper(pipe, token, o?.dnsLogOnly), onState: () => service?.helperStateChanged() })
       : undefined,
     forceHelper,
+    dnsLog: process.platform === "win32" ? { reader: windowsDnsLog, set: setDnsLog } : undefined,
   });
 }
 
@@ -524,6 +531,7 @@ async function main(): Promise<void> {
   const tick = () =>
     void (async () => {
       await service.resumeIfDue();
+      await service.stopDnsLogIfDue().catch((err: Error) => console.error(err.message));
       const now = await fingerprint();
       if (now !== seen) {
         seen = now;
@@ -604,7 +612,16 @@ if (helperRun) {
 } else {
   app.on("second-instance", showWindow);
   app.on("before-quit", () => { quitting = true; });
-  app.on("will-quit", () => {
+  // before the helper goes: switch off a DNS log NullHost switched on (at most 10 s, then quit anyway);
+  // with none to switch off, quitting (and an update's restart) is not held up at all
+  let dnsLogStopped = false;
+  app.on("will-quit", (e) => {
+    if (service?.dnsLogStopOnQuit && !dnsLogStopped) {
+      e.preventDefault();
+      dnsLogStopped = true;
+      void Promise.race([service.stopDnsLogOnQuit(), new Promise((r) => setTimeout(r, 10_000))]).finally(() => app.quit());
+      return;
+    }
     globalShortcut.unregisterAll();
     service?.dispose();
   });
