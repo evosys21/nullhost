@@ -68,6 +68,12 @@ export async function act<T>(label: string, fn: () => Promise<T>, notice?: (r: T
   }
 }
 
+/** "Update": download, check and install the newer NullHost; it quits and starts again on the new version */
+export function installAppUpdate(version: string): void {
+  if (!confirm(`Download NullHost ${version} from GitHub, check its signature and install it? NullHost closes and starts again on the new version. Your settings and the blocking stay.`)) return;
+  void act("Updating NullHost", () => api.installAppUpdate(), () => `NullHost ${version} is being installed. It starts again by itself.`);
+}
+
 api.onChanged(() => void refresh());
 api.onProgress((step) => {
   if (store.busy) store.step = step;

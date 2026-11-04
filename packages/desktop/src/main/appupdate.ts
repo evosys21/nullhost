@@ -1,6 +1,5 @@
 // New NullHost versions: asks GitHub for the latest published release. It only reads;
-// it never downloads or installs anything. The user opens the release page and runs
-// the installer, which upgrades in place.
+// downloading and installing one is selfupdate.ts, and only when the user clicks Update.
 import type { AppUpdate } from "../shared/api";
 
 export const RELEASES_API = "https://api.github.com/repos/evosys21/nullhost/releases/latest";
@@ -83,7 +82,7 @@ export function afterCheck(s: StoredAppUpdate, result: { version: string } | { e
   return next;
 }
 
-export function appUpdateView(s: StoredAppUpdate, current: string): AppUpdate {
+export function appUpdateView(s: StoredAppUpdate, current: string, canInstall = false): AppUpdate {
   const enabled = s.checkAppUpdates !== false;
   const latest = parseVersion(s.latestVersion) ? s.latestVersion : undefined;
   const newer = isNewer(latest, current);
@@ -96,6 +95,7 @@ export function appUpdateView(s: StoredAppUpdate, current: string): AppUpdate {
     available: enabled && newer && s.skippedVersion !== latest,
     checkedAt: s.latestCheckedAt,
     error: s.lastError,
+    canInstall,
   };
 }
 

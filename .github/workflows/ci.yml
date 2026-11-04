@@ -49,13 +49,22 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v5
+        with:
+          path: src
       - uses: actions/download-artifact@v5
         with:
           name: installer
+      # NullHost updates itself only from files in a SHA256SUMS.txt signed with this key
+      - name: Sign checksums
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          sha256sum NullHost-Setup-*.exe NullHost-*-portable.zip > SHA256SUMS.txt
+          node src/packages/desktop/scripts/sign-release.mjs
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          sha256sum NullHost-Setup-*.exe NullHost-*-portable.zip > SHA256SUMS.txt
-          gh release create "$GITHUB_REF_NAME" NullHost-Setup-*.exe NullHost-*-portable.zip SHA256SUMS.txt \
+          gh release create "$GITHUB_REF_NAME" NullHost-Setup-*.exe NullHost-*-portable.zip SHA256SUMS.txt SHA256SUMS.txt.sig \
             --repo "$GITHUB_REPOSITORY" --title "NullHost ${GITHUB_REF_NAME#v}" --generate-notes

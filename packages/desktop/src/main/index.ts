@@ -9,6 +9,7 @@ import { API_METHODS, CHANGED_EVENT, PROGRESS_EVENT, channel, type AppUpdate, ty
 import { loginItemAutostart, removeLegacyLogonTask } from "./autostart";
 import { HelperBroker, runHelper, type HelperContext } from "./helper";
 import { shieldPng, type IconState } from "./icons";
+import { portableSwapScript } from "./selfupdate";
 import { Service } from "./service";
 
 const runAsync = promisify(execFile);
@@ -177,7 +178,11 @@ async function trayTemplate(): Promise<MenuItemConstructorOptions[]> {
   const pause = (until: Date) => run(() => service.pause(until.toISOString()));
   return [
     { label: t.label, enabled: false },
-    ...(update.available && update.url ? [{ label: `Download NullHost ${update.latest}…`, click: () => void shell.openExternal(update.url!) }] : []),
+    ...(update.available && update.url
+      ? [update.canInstall
+          ? { label: `Update NullHost to ${update.latest}…`, click: showWindow }
+          : { label: `Download NullHost ${update.latest}…`, click: () => void shell.openExternal(update.url!) }]
+      : []),
     { type: "separator" },
     {
       label: t.state === "enabled" ? "Disable blocking" : "Enable blocking",
@@ -217,13 +222,38 @@ function createTray(): void {
   void refreshTray();
 }
 
-/** A Windows notification for a new NullHost version; clicking it opens the release page. */
+/** A Windows notification for a new NullHost version; clicking it opens NullHost (its Update button), or the release page. */
 function notifyAppUpdate(u: AppUpdate): void {
   if (!u.url || !Notification.isSupported()) return;
-  const n = new Notification({ title: `NullHost ${u.latest} is available`, body: `You have ${u.current}. Click to open the download page.`, icon: icon("enabled") });
+  const body = u.canInstall ? `You have ${u.current}. Open NullHost to update.` : `You have ${u.current}. Click to open the download page.`;
+  const n = new Notification({ title: `NullHost ${u.latest} is available`, body, icon: icon("enabled") });
   const url = u.url;
-  n.on("click", () => void shell.openExternal(url));
+  n.on("click", () => (u.canInstall ? showWindow() : void shell.openExternal(url)));
   n.show();
+}
+
+/**
+ * Run a downloaded, verified update, then quit. The installed app: the new installer,
+ * silently, with one UAC prompt; it upgrades in place and starts NullHost again as the
+ * user (--force-run). The portable copy: a hidden PowerShell script that waits for this
+ * process to end, swaps the folder for the new one and starts it.
+ */
+async function applyUpdate(file: string): Promise<void> {
+  const ps = (s: string) => `'${s.replace(/'/g, "''")}'`;
+  if (portable) {
+    const script = join(dirname(file), "swap.ps1");
+    await writeFile(script, portableSwapScript({ pid: process.pid, zip: file, appDir: dirname(process.execPath), exe: process.execPath }), "utf8");
+    spawn("powershell", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", script], { detached: true, stdio: "ignore", windowsHide: true }).unref();
+  } else {
+    const start = `Start-Process -FilePath ${ps(file)} -ArgumentList ${ps("/S --updated --force-run")} -Verb RunAs`;
+    try {
+      await runAsync("powershell", ["-NoProfile", "-NonInteractive", "-Command", start], { windowsHide: true, timeout: 180_000 });
+    } catch {
+      throw new Error("Administrator rights were not granted, so NullHost was not updated.");
+    }
+  }
+  // let the answer reach the window, then go: the installer or the script needs this process gone
+  setTimeout(() => { quitting = true; app.quit(); }, 500);
 }
 
 function registerHotkey(accelerator: string): boolean {
@@ -403,6 +433,7 @@ function createService(): Promise<Service> {
     configFile: configArg,
     dev: !app.isPackaged,
     portable,
+    applyUpdate: app.isPackaged ? applyUpdate : undefined,
     scheduler: (canInstall) => windowsScheduler(canInstall && installed),
     scheduledCommand,
     autostart: loginItemAutostart(app, installed),

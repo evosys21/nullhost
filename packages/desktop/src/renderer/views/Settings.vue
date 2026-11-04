@@ -4,7 +4,7 @@ import type { Check, ImportSummary, ScheduleStatus, Theme } from "../../shared/a
 import Banners from "../components/Banners.vue";
 import Icon from "../components/Icon.vue";
 import Toggle from "../components/Toggle.vue";
-import { act, api, cleanError, fmt, store } from "../store";
+import { act, api, cleanError, fmt, installAppUpdate, store } from "../store";
 
 const set = computed(() => store.settings);
 const info = computed(() => store.info);
@@ -105,13 +105,14 @@ async function removeRegion() {
           <Toggle :model-value="set.startAtLogin" label="Start at login" :disabled="!set.startAtLoginAvailable" @update:model-value="(on: boolean) => saveSetting('Saving', { startAtLogin: on }, on ? 'NullHost will start at login.' : 'NullHost will not start at login.')" />
         </div>
         <div class="f">
-          <div>Check for new NullHost versions<div class="hint">once a day, asks GitHub for the latest release; nothing is downloaded or installed by itself</div></div>
+          <div>Check for new NullHost versions<div class="hint">once a day, asks GitHub for the latest release; it downloads and installs only when you press Update</div></div>
           <Toggle :model-value="set.checkAppUpdates" label="Check for new NullHost versions" @update:model-value="(on: boolean) => saveSetting('Saving', { checkAppUpdates: on }, on ? 'NullHost will tell you when a new version is out.' : 'NullHost will not check for new versions.')" />
         </div>
         <div class="f">
           <div>Version {{ info?.version }}<div class="hint" :class="{ warnc: appUpdate?.error }">{{ appUpdate?.error ? `last check failed: ${appUpdate.error}` : appUpdate?.checkedAt ? `latest ${appUpdate.latest ?? "?"}, checked ${when(appUpdate.checkedAt)}` : "not checked yet" }}</div></div>
           <span style="display: flex; gap: 8px">
-            <a v-if="appUpdate?.url" class="btn sm primary" :href="appUpdate.url" target="_blank" rel="noopener">Download {{ appUpdate.latest }}</a>
+            <button v-if="appUpdate?.url && appUpdate.canInstall" class="btn sm primary" type="button" :disabled="!!store.busy" @click="installAppUpdate(appUpdate.latest!)">Update to {{ appUpdate.latest }}</button>
+            <a v-else-if="appUpdate?.url" class="btn sm primary" :href="appUpdate.url" target="_blank" rel="noopener">Download {{ appUpdate.latest }}</a>
             <button class="btn sm" type="button" :disabled="!!store.busy" @click="checkAppUpdate">Check now</button>
           </span>
         </div>
