@@ -197,9 +197,6 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
 
   /** stop the helper (the app quits) */
   dispose(): void {
-    // closing the helper's pipe reports a state change; by now the window may be gone
-    this.listeners.clear();
-    this.progressListeners.clear();
     this.broker?.close();
   }
 
