@@ -1,11 +1,7 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { test } from "node:test";
-import { readHostsFile, writeWithRetry, type Platform } from "@nullhost/core";
 import { CHECK_EVERY_MS, RELEASES_API, afterCheck, appUpdateView, checkDue, fetchLatestVersion, isNewer, notifyDue, parseVersion, releaseUrl, type FetchFn } from "../src/main/appupdate.ts";
-import { Service } from "../src/main/service.ts";
+import { service } from "./service-helper.ts";
 
 test("versions: plain x.y.z with an optional v; pre-releases and junk are not versions", () => {
   assert.deepEqual(parseVersion("v1.2.3"), [1, 2, 3]);
@@ -87,32 +83,6 @@ test("notice: newer and not skipped; the notification once per version", () => {
   assert.equal(notifyDue({ ...seen, notifiedVersion: "0.2.0" }, "0.1.0"), false);
   assert.equal(notifyDue({ ...seen, notifiedVersion: "0.1.5" }, "0.1.0"), true);
 });
-
-/** a Service on a temp copy, with GitHub replaced by `latest` */
-async function service(latest: () => Promise<string>) {
-  const dir = await mkdtemp(join(tmpdir(), "nullhost-appupdate-"));
-  const hostsFile = join(dir, "hosts");
-  await writeFile(hostsFile, "127.0.0.1 localhost\r\n");
-  const platform: Platform = {
-    name: "windows", eol: "\r\n", perLine: 9, hardCeiling: 1_000,
-    systemHostsPath: () => "C:\\Windows\\System32\\drivers\\etc\\hosts",
-    isElevated: async () => false,
-    readHosts: readHostsFile,
-    writeHosts: (p, c) => writeWithRetry(p, c),
-    flushDns: async () => undefined,
-  };
-  const svc = await Service.create({
-    version: "0.1.0", hostsFile, dataDir: join(dir, "data"), platform, dev: true,
-    scheduler: () => { throw new Error("not in this test"); },
-    scheduledCommand: () => { throw new Error("not in this test"); },
-    autostart: { available: false, isEnabled: async () => false, enable: async () => undefined, disable: async () => undefined },
-    registerHotkey: () => true,
-    openPath: async () => undefined,
-    latestVersion: latest,
-  });
-  const desktopJson = async () => JSON.parse(await readFile(join(dir, "data", "desktop.json"), "utf8")) as Record<string, unknown>;
-  return { svc, desktopJson, done: () => rm(dir, { recursive: true, force: true }) };
-}
 
 test("service: settings changed while GitHub answers are kept", async () => {
   let answer!: (v: string) => void;

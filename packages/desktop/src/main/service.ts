@@ -18,7 +18,7 @@ import {
 } from "@nullhost/core";
 import type { AllowText, AppInfo, AppUpdate, ApplySummary, ImportSummary, DesktopSettings, NullhostApi, SourceView, Theme, TidyPreview } from "../shared/api";
 import { afterCheck, appUpdateView, checkDue, fetchLatestVersion, notifyDue, type StoredAppUpdate } from "./appupdate.ts";
-import { downloadVerified, type DownloadFn } from "./selfupdate.ts";
+import { downloadVerified, type DownloadFn, type VerifiedFile } from "./selfupdate.ts";
 import type { Autostart } from "./autostart";
 import type { HelperBroker } from "./helper";
 
@@ -51,9 +51,10 @@ export interface ServiceOptions {
   /** the latest NullHost release on GitHub ("1.2.3"); tests pass a fake */
   latestVersion?: () => Promise<string>;
   /** runs a downloaded, verified update (the installer, or the portable swap) and quits; absent in dev */
-  applyUpdate?: (file: string) => Promise<void>;
-  /** release downloads; tests pass a fake */
+  applyUpdate?: (file: VerifiedFile) => Promise<void>;
+  /** release downloads and the key their checksums are signed with; tests pass fakes */
   downloadFn?: DownloadFn;
+  updatePublicKey?: string;
 }
 
 interface DesktopFile extends StoredAppUpdate {
@@ -196,6 +197,9 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
 
   /** stop the helper (the app quits) */
   dispose(): void {
+    // closing the helper's pipe reports a state change; by now the window may be gone
+    this.listeners.clear();
+    this.progressListeners.clear();
     this.broker?.close();
   }
 
@@ -472,6 +476,7 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
         dir: join(this.engine.paths.dataDir, "update"),
         current: this.o.version,
         fetchFn: this.o.downloadFn,
+        publicKey: this.o.updatePublicKey,
         onProgress: (step) => this.progress(step),
       });
       this.progress(this.o.portable ? "Restarting into the new version" : "Waiting for administrator approval");
