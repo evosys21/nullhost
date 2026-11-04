@@ -8,7 +8,7 @@ and leaves everything else in the file alone: your own entries stay exactly
 where they are. Blocking can be switched on, off or paused in a second, from
 the window, the tray or a hotkey.
 
-> **Status:** early (0.1.4), Windows only. The installer and the portable exe are not code-signed,
+> **Status:** early (0.1.5), Windows only. The installer and the portable exe are not code-signed,
 > so Windows SmartScreen will warn before running it.
 
 ## Features
@@ -90,8 +90,10 @@ or checksum doesn't match is deleted and nothing is installed.
 The releases are not code-signed, so this signature is what NullHost trusts: CI
 signs each release's checksums with a key only the repository holds. It guards
 against a changed download, not against someone taking over the repository.
-Versions up to 0.1.2 can't update themselves; install 0.1.3 or newer by hand
-once. "Update lists" only refreshes the blocklists, not the app.
+Versions up to 0.1.2 can't update themselves; install a newer one by hand once.
+The portable copy of 0.1.3 and 0.1.4 downloads the update but never swaps it in
+(NullHost closes and nothing starts): unpack the 0.1.5 zip over it by hand once.
+"Update lists" only refreshes the blocklists, not the app.
 
 ### Portable copy
 
