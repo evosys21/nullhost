@@ -101,6 +101,8 @@ export interface AppUpdate {
   checkedAt?: string;
   /** the last check failed (offline, GitHub unreachable); nothing is shown for it */
   error?: string;
+  /** this copy can download and install it itself (the installed app or the portable zip, not dev) */
+  canInstall: boolean;
 }
 
 /** what Import settings brought in */
@@ -160,6 +162,8 @@ export interface NullhostApi {
   checkAppUpdate(): Promise<AppUpdate>;
   /** "Skip this version": no notice until a newer one */
   skipAppUpdate(version: string): Promise<AppUpdate>;
+  /** download the newer version, check its signature, install it and restart (resolves just before NullHost quits) */
+  installAppUpdate(): Promise<void>;
   /** other hosts-file tools running right now, e.g. "HostsMan (hm.exe)" */
   conflicts(): Promise<string[]>;
   /** called after anything changed (any window, the tray, the hotkey, the pause timer) */
@@ -204,6 +208,7 @@ export const API_METHODS = [
   "appUpdate",
   "checkAppUpdate",
   "skipAppUpdate",
+  "installAppUpdate",
   "conflicts",
 ] as const satisfies ReadonlyArray<Exclude<keyof NullhostApi, "onChanged" | "onProgress">>;
 

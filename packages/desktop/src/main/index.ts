@@ -1,6 +1,7 @@
 import { execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { appendFile, mkdir, stat, writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { appendFile, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, win32 } from "node:path";
 import { promisify } from "node:util";
 import { BrowserWindow, Menu, Notification, Tray, app, dialog, globalShortcut, ipcMain, nativeImage, nativeTheme, shell, type MenuItemConstructorOptions } from "electron";
@@ -9,6 +10,7 @@ import { API_METHODS, CHANGED_EVENT, PROGRESS_EVENT, channel, type AppUpdate, ty
 import { loginItemAutostart, removeLegacyLogonTask } from "./autostart";
 import { HelperBroker, runHelper, type HelperContext } from "./helper";
 import { shieldPng, type IconState } from "./icons";
+import { SWAP_FAILED, elevatedInstallScript, encodePowerShell, portableSwapScript, psQuote, type VerifiedFile } from "./selfupdate";
 import { Service } from "./service";
 
 const runAsync = promisify(execFile);
@@ -179,7 +181,11 @@ async function trayTemplate(): Promise<MenuItemConstructorOptions[]> {
   const pause = (until: Date) => run(() => service.pause(until.toISOString()));
   return [
     { label: t.label, enabled: false },
-    ...(update.available && update.url ? [{ label: `Download NullHost ${update.latest}…`, click: () => void shell.openExternal(update.url!) }] : []),
+    ...(update.available && update.url
+      ? [update.canInstall
+          ? { label: `Update NullHost to ${update.latest}…`, click: showWindow }
+          : { label: `Download NullHost ${update.latest}…`, click: () => void shell.openExternal(update.url!) }]
+      : []),
     { type: "separator" },
     {
       label: t.state === "enabled" ? "Disable blocking" : "Enable blocking",
@@ -231,13 +237,52 @@ function createTray(): void {
   void refreshTray();
 }
 
-/** A Windows notification for a new NullHost version; clicking it opens the release page. */
+/** A Windows notification for a new NullHost version; clicking it opens NullHost (its Update button), or the release page. */
 function notifyAppUpdate(u: AppUpdate): void {
   if (!u.url || !Notification.isSupported()) return;
-  const n = new Notification({ title: `NullHost ${u.latest} is available`, body: `You have ${u.current}. Click to open the download page.`, icon: icon("enabled") });
+  const body = u.canInstall ? `You have ${u.current}. Open NullHost to update.` : `You have ${u.current}. Click to open the download page.`;
+  const n = new Notification({ title: `NullHost ${u.latest} is available`, body, icon: icon("enabled") });
   const url = u.url;
-  n.on("click", () => void shell.openExternal(url));
+  n.on("click", () => (u.canInstall ? showWindow() : void shell.openExternal(url)));
   n.show();
+}
+
+/**
+ * Run a downloaded, verified update, then quit. The installed app: one UAC prompt for a
+ * short PowerShell that copies the installer where only administrators can write,
+ * checks it again and runs it silently; it upgrades in place and starts NullHost again
+ * as the user (--force-run). The portable copy: a hidden PowerShell script that waits
+ * for NullHost to end, swaps the folder for the new one and starts it.
+ */
+async function applyUpdate(f: VerifiedFile): Promise<void> {
+  if (portable) {
+    const script = join(dirname(f.path), "swap.ps1");
+    const failedLog = join(dirname(f.path), SWAP_FAILED);
+    const appDir = dirname(process.execPath);
+    // the BOM makes Windows PowerShell read it as UTF-8 (non-ASCII user or folder names)
+    await writeFile(script, "﻿" + portableSwapScript({ pid: process.pid, zip: f.path, appDir, exe: process.execPath, failedLog }), "utf8");
+    // started from the folder's parent: a process standing in the folder would keep it in use
+    spawn("powershell", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", script], { cwd: dirname(appDir), detached: true, stdio: "ignore", windowsHide: true }).unref();
+  } else {
+    const elevated = encodePowerShell(elevatedInstallScript({ file: f.path, sha256: f.sha256, folder: `NullHost-update-${randomBytes(8).toString("hex")}` }));
+    const start = `Start-Process -FilePath 'powershell.exe' -ArgumentList ${psQuote(`-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand ${elevated}`)} -Verb RunAs -WindowStyle Hidden`;
+    try {
+      await runAsync("powershell", ["-NoProfile", "-NonInteractive", "-Command", start], { windowsHide: true, timeout: 180_000 });
+    } catch {
+      throw new Error("Administrator rights were not granted, so NullHost was not updated.");
+    }
+  }
+  // let the answer reach the window, then go: the installer or the script needs this process gone
+  setTimeout(() => { quitting = true; app.quit(); }, 500);
+}
+
+/** a portable swap that failed left its reason; the old copy started again, so say so once */
+async function reportFailedSwap(): Promise<void> {
+  const log = join(service.engine.paths.dataDir, "update", SWAP_FAILED);
+  const why = await readFile(log, "utf8").then((s) => s.trim(), () => null);
+  if (why === null) return;
+  await rm(log, { force: true });
+  void dialog.showMessageBox({ type: "warning", title: "NullHost", message: "NullHost was not updated.", detail: `The new version could not replace this folder, so this copy started again unchanged.\n\n${why}` });
 }
 
 function registerHotkey(accelerator: string): boolean {
@@ -296,8 +341,7 @@ async function launchHelper(pipe: string, token: string): Promise<void> {
     return;
   }
   const argLine = helperArgs(pipe, token).map(quoteArg).join(" ");
-  const ps = (s: string) => `'${s.replace(/'/g, "''")}'`;
-  const script = `Start-Process -FilePath ${ps(process.execPath)} -ArgumentList ${ps(argLine)} -Verb RunAs -WindowStyle Hidden`;
+  const script = `Start-Process -FilePath ${psQuote(process.execPath)} -ArgumentList ${psQuote(argLine)} -Verb RunAs -WindowStyle Hidden`;
   try {
     await runAsync("powershell", ["-NoProfile", "-NonInteractive", "-Command", script], { windowsHide: true, timeout: 180_000 });
   } catch {
@@ -417,6 +461,7 @@ function createService(): Promise<Service> {
     configFile: configArg,
     dev: !app.isPackaged,
     portable,
+    applyUpdate: app.isPackaged ? applyUpdate : undefined,
     scheduler: (canInstall) => windowsScheduler(canInstall && installed),
     scheduledCommand,
     autostart: loginItemAutostart(app, installed),
@@ -489,6 +534,7 @@ async function main(): Promise<void> {
   setInterval(tick, 30_000);
   tick();
   // new NullHost versions: the installed app asks GitHub a little after start, then once a day
+  if (portable && !smokeDir) void reportFailedSwap().catch((err: Error) => console.error(err.message));
   if (app.isPackaged && !smokeDir) {
     const updateTick = () =>
       void (async () => {
