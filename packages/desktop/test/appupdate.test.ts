@@ -164,3 +164,14 @@ test("service: the notification once per version, and not for a skipped one", as
     await t.done();
   }
 });
+
+test("service: a dev build reports a newer version but cannot install it", async () => {
+  const t = await service(async () => "0.2.0");
+  try {
+    const u = await t.svc.checkAppUpdate();
+    assert.deepEqual([u.newer, u.canInstall], [true, false]);
+    await assert.rejects(t.svc.installAppUpdate(), /installed or portable NullHost app/);
+  } finally {
+    await t.done();
+  }
+});

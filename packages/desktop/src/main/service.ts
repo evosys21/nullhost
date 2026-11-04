@@ -18,6 +18,7 @@ import {
 } from "@nullhost/core";
 import type { AllowText, AppInfo, AppUpdate, ApplySummary, ImportSummary, DesktopSettings, NullhostApi, SourceView, Theme, TidyPreview } from "../shared/api";
 import { afterCheck, appUpdateView, checkDue, fetchLatestVersion, notifyDue, type StoredAppUpdate } from "./appupdate.ts";
+import { downloadVerified, type DownloadFn } from "./selfupdate.ts";
 import type { Autostart } from "./autostart";
 import type { HelperBroker } from "./helper";
 
@@ -49,6 +50,10 @@ export interface ServiceOptions {
   forceHelper?: boolean;
   /** the latest NullHost release on GitHub ("1.2.3"); tests pass a fake */
   latestVersion?: () => Promise<string>;
+  /** runs a downloaded, verified update (the installer, or the portable swap) and quits; absent in dev */
+  applyUpdate?: (file: string) => Promise<void>;
+  /** release downloads; tests pass a fake */
+  downloadFn?: DownloadFn;
 }
 
 interface DesktopFile extends StoredAppUpdate {
@@ -115,6 +120,7 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
   private desktopQueue: Promise<unknown> = Promise.resolve();
   /** the check for a new version that is running, if any */
   private appUpdateRun: Promise<AppUpdate> | null = null;
+  private installRun: Promise<void> | null = null;
 
   private constructor(o: ServiceOptions, engine: Engine, elevated: boolean, broker: HelperBroker | null) {
     this.o = o;
@@ -446,7 +452,32 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
   // ------------------------------------------------------------ new NullHost versions
 
   async appUpdate(): Promise<AppUpdate> {
-    return appUpdateView(await this.desktop(), this.o.version);
+    return appUpdateView(await this.desktop(), this.o.version, this.canInstallUpdate);
+  }
+
+  private get canInstallUpdate(): boolean {
+    return !this.o.dev && Boolean(this.o.applyUpdate);
+  }
+
+  /** "Update": download the newer release, check it against the signed checksums, run it */
+  installAppUpdate(): Promise<void> {
+    if (this.installRun) return this.installRun;
+    this.installRun = (async () => {
+      if (!this.canInstallUpdate) throw new Error("Updating itself works in the installed or portable NullHost app.");
+      const u = await this.appUpdate();
+      if (!u.newer || !u.latest) throw new Error("There is no newer NullHost version to install.");
+      const file = await downloadVerified({
+        version: u.latest,
+        portable: this.o.portable ?? false,
+        dir: join(this.engine.paths.dataDir, "update"),
+        current: this.o.version,
+        fetchFn: this.o.downloadFn,
+        onProgress: (step) => this.progress(step),
+      });
+      this.progress(this.o.portable ? "Restarting into the new version" : "Waiting for administrator approval");
+      await this.o.applyUpdate!(file);
+    })().finally(() => (this.installRun = null));
+    return this.installRun;
   }
 
   /** Ask GitHub, then merge the answer (or the error) into desktop.json as it is by then. */
@@ -486,7 +517,7 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
       due = notifyDue(x, this.o.version);
       return due ? { ...x, notifiedVersion: x.latestVersion } : x;
     });
-    return due ? appUpdateView(d, this.o.version) : null;
+    return due ? appUpdateView(d, this.o.version, this.canInstallUpdate) : null;
   }
 
   // ------------------------------------------------------------ schedule, troubleshoot, catalog
