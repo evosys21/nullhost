@@ -148,10 +148,18 @@ test("portable swap: waits for every NullHost, retries the move, always starts a
   assert.match(s, /Get-Process -Name NullHost/, "the helper and child processes too");
   assert.match(s, /'C:\\Users\\o''brien\\up\\NullHost-0\.2\.0-portable\.zip'/, "quotes are doubled");
   assert.match(s, /\$stage = 'D:\\Tools\\NullHost\.update'; \$app = 'D:\\Tools\\NullHost'; \$old = 'D:\\Tools\\NullHost\.old'/);
-  const order = ["Wait-Process", "Get-Process -Name NullHost", "tar.exe", "Move-Item -LiteralPath $app -Destination $old", "Move-Item -LiteralPath $new.FullName", "\r\n} catch {", "Move-Item -LiteralPath $old -Destination $app", "swap-failed.txt", "Start-Process -FilePath $exe"];
-  const at = order.map((x) => s.indexOf(x));
-  assert.ok(at.every((i, k) => i >= 0 && (k === 0 || i > at[k - 1]!)), `steps in this order: ${at.join(",")}`);
-  assert.ok(s.trimEnd().endsWith("Start-Process -FilePath $exe"), "after success or failure");
+  const order = [
+    "Wait-Process", "Get-Process -Name NullHost", "Set-Location -LiteralPath (Split-Path -Parent $app)", "tar.exe",
+    "Move-Item -LiteralPath $app -Destination $old", "Move-Item -LiteralPath $new.FullName", "Start-Process -FilePath $exe",
+    // a failed start of the new copy rolls back too: the new folder goes, the old one returns and starts
+    "\r\n} catch {", "if ($swapped) { Remove-Item -LiteralPath $app", "Move-Item -LiteralPath $old -Destination $app", "swap-failed.txt", "Start-Process -FilePath $exe",
+  ];
+  let pos = -1;
+  for (const step of order) {
+    const i = s.indexOf(step, pos + 1);
+    assert.ok(i > pos, `"${step}" after the step before it`);
+    pos = i;
+  }
 });
 
 test("service: Update downloads the newer version for this copy and hands the checked file over", async () => {

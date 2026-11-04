@@ -197,8 +197,10 @@ export const SWAP_FAILED = "swap-failed.txt";
  * until no NullHost process runs any more (the app, its renderers, the admin helper;
  * an elevated one shows no path, so it goes by name), unpacks the zip next to the
  * folder, moves the old folder aside (retrying while files are still in use), the new
- * one into its place, and starts it. On any failure it puts the old folder back,
- * writes the reason to `failedLog`, and starts the old copy, so NullHost always comes back.
+ * one into its place, and starts it. On any failure, starting the new copy included, it
+ * puts the old folder back, writes the reason to `failedLog`, and starts the old copy,
+ * so NullHost always comes back. index.ts writes it with a BOM: Windows PowerShell reads
+ * a BOM-less script in the ANSI code page, which would garble non-ASCII paths.
  */
 export function portableSwapScript(o: { pid: number; zip: string; appDir: string; exe: string; failedLog: string }): string {
   return [
@@ -207,7 +209,9 @@ export function portableSwapScript(o: { pid: number; zip: string; appDir: string
     `try { Wait-Process -Id ${o.pid} -Timeout 60 } catch {}`,
     "$until = (Get-Date).AddSeconds(30)",
     "while ((Get-Date) -lt $until -and (Get-Process -Name NullHost -ErrorAction SilentlyContinue | Where-Object { -not $_.Path -or $_.Path.StartsWith($app + '\\', 'OrdinalIgnoreCase') })) { Start-Sleep -Milliseconds 300 }",
-    "$moved = $false",
+    // never stand in the folder being moved
+    "Set-Location -LiteralPath (Split-Path -Parent $app)",
+    "$moved = $false; $swapped = $false",
     "try {",
     "  Remove-Item -LiteralPath $stage, $old -Recurse -Force -ErrorAction SilentlyContinue",
     "  New-Item -ItemType Directory -Path $stage | Out-Null",
@@ -217,12 +221,17 @@ export function portableSwapScript(o: { pid: number; zip: string; appDir: string
     "  if (-not $new -or -not (Test-Path (Join-Path $new.FullName 'NullHost.exe'))) { throw 'the zip has no NullHost.exe' }",
     "  for ($i = 0; -not $moved; $i++) { try { Move-Item -LiteralPath $app -Destination $old; $moved = $true } catch { if ($i -ge 20) { throw } Start-Sleep -Milliseconds 500 } }",
     "  Move-Item -LiteralPath $new.FullName -Destination $app",
+    "  $swapped = $true",
+    // starting the new copy is part of the swap: if Windows refuses it, roll back
+    "  Start-Process -FilePath $exe",
     "  Remove-Item -LiteralPath $stage, $old -Recurse -Force -ErrorAction SilentlyContinue",
     "} catch {",
+    "  $why = \"$_\"",
+    "  if ($swapped) { Remove-Item -LiteralPath $app -Recurse -Force -ErrorAction SilentlyContinue }",
     "  if ($moved -and -not (Test-Path -LiteralPath $app)) { Move-Item -LiteralPath $old -Destination $app }",
     "  Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue",
-    `  Set-Content -LiteralPath ${psQuote(o.failedLog)} -Value "$_" -Encoding UTF8`,
+    `  Set-Content -LiteralPath ${psQuote(o.failedLog)} -Value $why -Encoding UTF8`,
+    "  Start-Process -FilePath $exe",
     "}",
-    "Start-Process -FilePath $exe",
   ].join("\r\n");
 }
