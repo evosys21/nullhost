@@ -189,6 +189,19 @@ export function elevatedInstallScript(o: { file: string; sha256: string; folder:
   ].join("\r\n");
 }
 
+/**
+ * The arguments for `powershell` that start `script` in a hidden PowerShell of its own
+ * and return at once, so it outlives NullHost. Not `spawn(..., { detached: true })`: a
+ * detached PowerShell has no console and exits with 0 without running anything. And a
+ * plain child would be killed with NullHost (Node keeps children in a job object); a
+ * process started by that child (Start-Process) is not, so this is two steps.
+ */
+export function hiddenPowerShell(script: string, workingDir?: string): string[] {
+  const wd = workingDir ? ` -WorkingDirectory ${psQuote(workingDir)}` : "";
+  const inner = `-NoProfile -NonInteractive -EncodedCommand ${encodePowerShell(script)}`;
+  return ["-NoProfile", "-NonInteractive", "-Command", `Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden${wd} -ArgumentList ${psQuote(inner)}`];
+}
+
 /** where a failed portable swap leaves its reason, for the restarted app to show */
 export const SWAP_FAILED = "swap-failed.txt";
 
@@ -199,8 +212,8 @@ export const SWAP_FAILED = "swap-failed.txt";
  * folder, moves the old folder aside (retrying while files are still in use), the new
  * one into its place, and starts it. On any failure, starting the new copy included, it
  * puts the old folder back, writes the reason to `failedLog`, and starts the old copy,
- * so NullHost always comes back. index.ts writes it with a BOM: Windows PowerShell reads
- * a BOM-less script in the ANSI code page, which would garble non-ASCII paths.
+ * so NullHost always comes back. It runs through hiddenPowerShell (below), as UTF-16, so
+ * non-ASCII user and folder names arrive intact.
  */
 export function portableSwapScript(o: { pid: number; zip: string; appDir: string; exe: string; failedLog: string }): string {
   return [
