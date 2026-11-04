@@ -10,7 +10,8 @@ import { API_METHODS, CHANGED_EVENT, PROGRESS_EVENT, channel, type AppUpdate, ty
 import { loginItemAutostart, removeLegacyLogonTask } from "./autostart";
 import { HelperBroker, runHelper, type HelperContext } from "./helper";
 import { shieldPng, type IconState } from "./icons";
-import { SWAP_FAILED, elevatedInstallScript, encodePowerShell, portableSwapScript, psQuote, type VerifiedFile } from "./selfupdate";
+import { canSwitchTo, describe, differentCopy, parseInstanceInfo, switchScript, type InstanceInfo } from "./instance";
+import { SWAP_FAILED, elevatedInstallScript, encodePowerShell, hiddenPowerShell, portableSwapScript, psQuote, type VerifiedFile } from "./selfupdate";
 import { Service } from "./service";
 
 const runAsync = promisify(execFile);
@@ -91,6 +92,49 @@ function icon(state: IconState): Electron.NativeImage {
     icons.set(state, img);
   }
   return img;
+}
+
+/** this copy, as a copy started later tells it to the running one */
+const thisCopy: InstanceInfo = {
+  exe: process.execPath,
+  version: app.getVersion(),
+  kind: portable ? "portable" : app.isPackaged ? "installed" : "dev build",
+  args: process.argv.slice(app.isPackaged ? 1 : 2),
+};
+let askingToSwitch = false;
+
+/**
+ * NullHost was started again. The same copy: bring the window up. Another copy or
+ * version (the portable zip while the installed app runs, say): bring the window up
+ * and ask whether to switch; Switch quits this one and starts the other.
+ */
+async function anotherCopyStarted(data: unknown): Promise<void> {
+  showWindow();
+  const started = parseInstanceInfo(data);
+  if (!started || !differentCopy(thisCopy, started) || askingToSwitch) return;
+  askingToSwitch = true;
+  try {
+    const can = canSwitchTo(started);
+    const options = {
+      type: "question" as const,
+      title: "NullHost",
+      message: `${describe(thisCopy)} is already running.`,
+      detail: `You started ${describe(started)}:\n${started.exe}\n\n${can
+        ? "Switch closes this one and starts that one. Blocking stays as it is."
+        : "Only one NullHost runs at a time. Quit this one from the tray to use the other."}`,
+      buttons: can ? ["Switch", "Keep this one"] : ["OK"],
+      defaultId: 0,
+      cancelId: can ? 1 : 0,
+      noLink: true,
+    };
+    const r = win ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
+    if (!can || r.response !== 0) return;
+    await runAsync("powershell", hiddenPowerShell(switchScript(process.pid, started)), { windowsHide: true, timeout: 30_000 });
+    quitting = true;
+    app.quit();
+  } finally {
+    askingToSwitch = false;
+  }
 }
 
 function showWindow(): void {
@@ -256,13 +300,11 @@ function notifyAppUpdate(u: AppUpdate): void {
  */
 async function applyUpdate(f: VerifiedFile): Promise<void> {
   if (portable) {
-    const script = join(dirname(f.path), "swap.ps1");
     const failedLog = join(dirname(f.path), SWAP_FAILED);
     const appDir = dirname(process.execPath);
-    // the BOM makes Windows PowerShell read it as UTF-8 (non-ASCII user or folder names)
-    await writeFile(script, "﻿" + portableSwapScript({ pid: process.pid, zip: f.path, appDir, exe: process.execPath, failedLog }), "utf8");
-    // started from the folder's parent: a process standing in the folder would keep it in use
-    spawn("powershell", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", script], { cwd: dirname(appDir), detached: true, stdio: "ignore", windowsHide: true }).unref();
+    const script = portableSwapScript({ pid: process.pid, zip: f.path, appDir, exe: process.execPath, failedLog });
+    // started in the folder's parent: a process standing in the folder would keep it in use
+    await runAsync("powershell", hiddenPowerShell(script, dirname(appDir)), { windowsHide: true, timeout: 30_000 });
   } else {
     const elevated = encodePowerShell(elevatedInstallScript({ file: f.path, sha256: f.sha256, folder: `NullHost-update-${randomBytes(8).toString("hex")}` }));
     const start = `Start-Process -FilePath 'powershell.exe' -ArgumentList ${psQuote(`-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand ${elevated}`)} -Verb RunAs -WindowStyle Hidden`;
@@ -607,10 +649,10 @@ if (helperRun) {
 } else if (scheduledRun) {
   // no window, no tray, no single-instance lock: the open app (if any) keeps running
   void app.whenReady().then(scheduledUpdate);
-} else if (!app.requestSingleInstanceLock()) {
+} else if (!app.requestSingleInstanceLock(thisCopy)) {
   app.quit();
 } else {
-  app.on("second-instance", showWindow);
+  app.on("second-instance", (_e, _argv, _cwd, data) => void anotherCopyStarted(data).catch((err: Error) => console.error(err.message)));
   app.on("before-quit", () => { quitting = true; });
   // before the helper goes: switch off a DNS log NullHost switched on (at most 10 s, then quit anyway);
   // with none to switch off, quitting (and an update's restart) is not held up at all
