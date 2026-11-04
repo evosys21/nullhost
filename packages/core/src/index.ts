@@ -26,6 +26,21 @@ export { configText, defaultConfig, loadConfig, parseConfig, saveConfig, userSou
 export { defaultState, loadState, saveState } from "./state.ts";
 export { Snapshots, type SnapshotInfo } from "./snapshots.ts";
 export { planTidy, type TidyPlan } from "./tidy.ts";
+export {
+  DNS_LOG_CHANNEL,
+  DNS_LOG_SIZE,
+  classify,
+  dnsStatusText,
+  dnsTypeName,
+  parseDnsEvents,
+  parseLogState,
+  parseQueryResults,
+  type BlockIndex,
+  type DnsEvent,
+  type DnsLogEntry,
+  type DnsLogState,
+  type DnsVerdict,
+} from "./dnslog.ts";
 export { defaultPaths, pathsIn, type Paths } from "./paths.ts";
 export * from "./platform/index.ts";
 export {

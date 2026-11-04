@@ -4,7 +4,7 @@ import { appendFile, mkdir, stat, writeFile } from "node:fs/promises";
 import { dirname, join, win32 } from "node:path";
 import { promisify } from "node:util";
 import { BrowserWindow, Menu, Notification, Tray, app, dialog, globalShortcut, ipcMain, nativeImage, nativeTheme, shell, type MenuItemConstructorOptions } from "electron";
-import { currentPlatform, defaultPaths, quoteArg, windowsScheduler, type ScheduledCommand } from "@nullhost/core";
+import { currentPlatform, defaultPaths, quoteArg, setDnsLog, windowsDnsLog, windowsScheduler, type ScheduledCommand } from "@nullhost/core";
 import { API_METHODS, CHANGED_EVENT, PROGRESS_EVENT, channel, type AppUpdate, type Theme } from "../shared/api";
 import { loginItemAutostart, removeLegacyLogonTask } from "./autostart";
 import { HelperBroker, runHelper, type HelperContext } from "./helper";
@@ -314,6 +314,7 @@ async function helperMain(): Promise<void> {
       else await s.install(await scheduledCommand(at, paths));
       return s.status();
     },
+    dnsLog: (action) => setDnsLog(action),
   };
   const code = await runHelper({ pipe: argValue("--pipe") ?? "", token: argValue("--token") ?? "", parentPid: Number(argValue("--parent")) || undefined, ctx });
   app.exit(code);
@@ -414,6 +415,7 @@ function createService(): Promise<Service> {
       ? () => new HelperBroker({ launch: launchHelper, onState: () => service?.helperStateChanged() })
       : undefined,
     forceHelper,
+    dnsLog: process.platform === "win32" ? { reader: windowsDnsLog, set: setDnsLog } : undefined,
   });
 }
 
@@ -465,6 +467,7 @@ async function main(): Promise<void> {
   const tick = () =>
     void (async () => {
       await service.resumeIfDue();
+      await service.stopDnsLogIfDue().catch((err: Error) => console.error(err.message));
       const now = await fingerprint();
       if (now !== seen) {
         seen = now;
@@ -544,7 +547,15 @@ if (helperRun) {
 } else {
   app.on("second-instance", showWindow);
   app.on("before-quit", () => { quitting = true; });
-  app.on("will-quit", () => {
+  // before the helper goes: switch off a DNS log NullHost switched on (at most 10 s, then quit anyway)
+  let dnsLogStopped = false;
+  app.on("will-quit", (e) => {
+    if (service && !dnsLogStopped) {
+      e.preventDefault();
+      dnsLogStopped = true;
+      void Promise.race([service.stopDnsLogOnQuit(), new Promise((r) => setTimeout(r, 10_000))]).finally(() => app.quit());
+      return;
+    }
     globalShortcut.unregisterAll();
     service?.dispose();
   });

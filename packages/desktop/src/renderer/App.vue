@@ -5,18 +5,20 @@ import Logo from "./components/Logo.vue";
 import { isMock, store, untilLabel, type Screen } from "./store";
 import Allowlist from "./views/Allowlist.vue";
 import Dashboard from "./views/Dashboard.vue";
+import DnsLog from "./views/DnsLog.vue";
 import Editor from "./views/Editor.vue";
 import Settings from "./views/Settings.vue";
 import Sources from "./views/Sources.vue";
 
-const NAV: Array<{ id: Screen; label: string; icon: "gauge" | "list" | "allow" | "edit" | "sliders" }> = [
+const NAV: Array<{ id: Screen; label: string; icon: "gauge" | "list" | "allow" | "edit" | "activity" | "sliders" }> = [
   { id: "dashboard", label: "Dashboard", icon: "gauge" },
   { id: "sources", label: "Sources", icon: "list" },
   { id: "allowlist", label: "Allowlist", icon: "allow" },
   { id: "editor", label: "Editor", icon: "edit" },
+  { id: "dnslog", label: "DNS log", icon: "activity" },
   { id: "settings", label: "Settings", icon: "sliders" },
 ];
-const VIEWS = { dashboard: Dashboard, sources: Sources, allowlist: Allowlist, editor: Editor, settings: Settings };
+const VIEWS = { dashboard: Dashboard, sources: Sources, allowlist: Allowlist, editor: Editor, dnslog: DnsLog, settings: Settings };
 
 window.__nullhostNav = (s: string) => {
   if (s in VIEWS) store.screen = s as Screen;

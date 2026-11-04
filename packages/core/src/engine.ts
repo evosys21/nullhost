@@ -4,6 +4,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { BUILTIN_CATALOG, type Catalog } from "./catalog.ts";
 import { configText, loadConfig, parseConfig, saveConfig, userSourceId } from "./config.ts";
+import type { BlockIndex } from "./dnslog.ts";
 import { OverCeilingError, RegionMarkersError, SourcesUnavailableError } from "./errors.ts";
 import { exportList, type ExportFormat } from "./export.ts";
 import { fetchSource, isRemote } from "./fetch.ts";
@@ -709,6 +710,23 @@ export class Engine {
       wouldBlock: b.owners.has(h),
       blockedNow,
       ownEntry,
+    };
+  }
+
+  /** What the DNS log classifies its rows against: like `check`, but built once for many names. */
+  async blockIndex(): Promise<BlockIndex> {
+    const cfg = await this.config();
+    const b = await this.build(false);
+    const names = new Map(b.sources.map((s) => [s.id, s.name]));
+    const named = (m: Map<string, string[]>) => new Map([...m].map(([h, ids]) => [h, ids.map((id) => names.get(id) ?? id)]));
+    const current = await this.platform.readHosts(this.hostsFile);
+    const region = extractRegion(current);
+    return {
+      region: new Set(region ? regionHosts(region) : []),
+      own: new Set(parseHosts(removeRegion(current)).hosts.map((x) => x.toLowerCase())),
+      owners: named(b.owners),
+      allowlisted: named(b.allowlistedOwners),
+      rules: compileAllowlist(cfg.allowlist).rules,
     };
   }
 

@@ -8,6 +8,7 @@ export { windowsPlatform } from "./windows.ts";
 export { linuxPlatform } from "./linux.ts";
 export { windowsScheduler, updateTaskXml, parseTaskStatus, quoteArg, UPDATE_TASK, updateTaskName, sameAccount, type Scheduler, type ScheduledCommand } from "./schedule.ts";
 export { exclusionCovers, findHostsTools, OTHER_HOSTS_TOOLS } from "./windows.ts";
+export { windowsDnsLog, setDnsLog, queryArgs, parseTasklist, type DnsLogAction, type DnsLogReader } from "./dnslog.ts";
 
 export function currentPlatform(): Platform {
   if (process.platform === "win32") return windowsPlatform();

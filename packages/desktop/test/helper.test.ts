@@ -29,9 +29,22 @@ function ctxFor(hostsPath: string, o: { elevated?: boolean } = {}) {
       log.push(`schedule ${at} ${paths.dataDir} ${paths.hostsFile ?? "-"}`);
       return { installed: at !== null, available: true, at: at ?? undefined };
     },
+    dnsLog: async (action) => {
+      log.push(`dnslog ${action}`);
+    },
   };
   return { ctx, log };
 }
+
+test("dnslog: only enable, disable or clear reach the context", async () => {
+  const { ctx, log } = ctxFor(await tempHosts());
+  for (const action of ["enable", "disable", "clear"]) assert.equal(await handleHelperRequest({ id: 1, op: "dnslog", action }, ctx), null);
+  assert.deepEqual(log, ["dnslog enable", "dnslog disable", "dnslog clear"]);
+  for (const action of [undefined, "", "Enable", "enable /ms:1", ["enable"], 1]) {
+    await assert.rejects(handleHelperRequest({ id: 2, op: "dnslog", action }, ctx), /enable, disable or clear/);
+  }
+  assert.equal(log.length, 3);
+});
 
 test("requests are validated; write always targets the helper's own hosts path", async () => {
   const hostsPath = await tempHosts();

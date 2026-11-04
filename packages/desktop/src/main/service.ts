@@ -2,13 +2,17 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
   Engine,
+  classify,
   currentPlatform,
   defaultPaths,
   doctor,
   parseAllowText,
   pathsIn,
   type ApplyResult,
+  type BlockIndex,
   type Check,
+  type DnsLogAction,
+  type DnsLogReader,
   type Platform,
   type ScheduleStatus,
   type ScheduledCommand,
@@ -16,7 +20,7 @@ import {
   type SourceFormat,
   type WriteReport,
 } from "@nullhost/core";
-import type { AllowText, AppInfo, AppUpdate, ApplySummary, ImportSummary, DesktopSettings, NullhostApi, SourceView, Theme, TidyPreview } from "../shared/api";
+import { DNS_LOG_MINUTES, type AllowText, type AppInfo, type AppUpdate, type ApplySummary, type DnsLogView, type ImportSummary, type DesktopSettings, type NullhostApi, type SourceView, type Theme, type TidyPreview } from "../shared/api.ts";
 import { afterCheck, appUpdateView, checkDue, fetchLatestVersion, notifyDue, type StoredAppUpdate } from "./appupdate.ts";
 import type { Autostart } from "./autostart";
 import type { HelperBroker } from "./helper";
@@ -49,11 +53,21 @@ export interface ServiceOptions {
   forceHelper?: boolean;
   /** the latest NullHost release on GitHub ("1.2.3"); tests pass a fake */
   latestVersion?: () => Promise<string>;
+  /** Windows' DNS Client log: read here, switched as admin (directly or through the helper); absent elsewhere */
+  dnsLog?: { reader: DnsLogReader; set: (action: DnsLogAction) => Promise<void> };
 }
+
+/** lookups read at most per call: the first read shows the newest of these */
+const DNS_LOG_FIRST = 500;
+const DNS_LOG_MORE = 2000;
+/** rebuild the blocked/not index at least this often, besides after every change */
+const BLOCK_INDEX_MAX_AGE = 60_000;
 
 interface DesktopFile extends StoredAppUpdate {
   hotkey: string;
   theme: Theme;
+  /** NullHost switched the DNS log on and switches it off at this time (ISO); absent when it is not ours */
+  dnsLogUntil?: string;
 }
 
 const DEFAULT_HOTKEY = "Control+Alt+H";
@@ -105,6 +119,8 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
   private readonly o: ServiceOptions;
   private readonly elevated: boolean;
   private readonly broker: HelperBroker | null;
+  /** for what needs admin whichever file is edited (the DNS log): `broker`, or one of its own on a copy */
+  private readonly adminBroker: HelperBroker | null;
   private hotkeyOk = false;
   private pauseEnded = false;
   private queue: Promise<unknown> = Promise.resolve();
@@ -115,12 +131,21 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
   private desktopQueue: Promise<unknown> = Promise.resolve();
   /** the check for a new version that is running, if any */
   private appUpdateRun: Promise<AppUpdate> | null = null;
+  /** what the DNS log classifies against; dropped on every change */
+  private blockIndex: { at: number; index: Promise<BlockIndex> } | null = null;
+  /** pid -> program name, kept for processes that have exited since */
+  private processNames = new Map<number, string>();
+  /** fires when NullHost's DNS log time is up */
+  private dnsLogTimer: NodeJS.Timeout | undefined;
+  /** a switch is running (maybe waiting at the UAC prompt): the log being off then is expected */
+  private dnsLogSwitching = false;
 
-  private constructor(o: ServiceOptions, engine: Engine, elevated: boolean, broker: HelperBroker | null) {
+  private constructor(o: ServiceOptions, engine: Engine, elevated: boolean, broker: HelperBroker | null, adminBroker: HelperBroker | null) {
     this.o = o;
     this.engine = engine;
     this.elevated = elevated;
     this.broker = broker;
+    this.adminBroker = adminBroker;
     this.desktopFile = join(engine.paths.dataDir, "desktop.json");
     engine.onProgress = (step) => this.progress(step);
   }
@@ -133,6 +158,8 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
     const systemFile = samePath(o.hostsFile ?? platform.systemHostsPath(), platform.systemHostsPath());
     const useHelper = Boolean(o.makeBroker) && !elevated && (systemFile || Boolean(o.forceHelper));
     const broker = useHelper ? o.makeBroker!() : null;
+    // a copy writes without admin, but the DNS log still needs it; this helper never writes the copy
+    const adminBroker = broker ?? (o.makeBroker && !elevated ? o.makeBroker() : null);
     // the engine's own steps reach the window through Service.progress (wired in the constructor)
     let service: Service | undefined;
     const engine = new Engine({
@@ -140,7 +167,7 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
       paths,
       hostsFile: o.hostsFile,
     });
-    service = new Service(o, engine, elevated, broker);
+    service = new Service(o, engine, elevated, broker, adminBroker);
     return service;
   }
 
@@ -175,6 +202,7 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
   }
 
   private changed(): void {
+    this.blockIndex = null;
     for (const cb of this.listeners) cb();
   }
 
@@ -190,7 +218,9 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
 
   /** stop the helper (the app quits) */
   dispose(): void {
+    clearTimeout(this.dnsLogTimer);
     this.broker?.close();
+    if (this.adminBroker !== this.broker) this.adminBroker?.close();
   }
 
   // ------------------------------------------------------------ read
@@ -524,6 +554,179 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
 
   async conflicts(): Promise<string[]> {
     return (await this.engine.platform.diagnostics?.otherHostsTools()) ?? [];
+  }
+
+  // ------------------------------------------------------------ DNS log
+
+  private get canSwitchDnsLog(): boolean {
+    return Boolean(this.o.dnsLog) && (this.elevated || Boolean(this.adminBroker));
+  }
+
+  /** this process is admin, or the helper is running: switching needs no prompt */
+  private get haveAdmin(): boolean {
+    return this.elevated || (this.adminBroker?.running ?? false);
+  }
+
+  /** "Run as administrator": start the helper now, with its one UAC prompt */
+  async elevate(): Promise<void> {
+    if (this.elevated) return;
+    if (!this.adminBroker) throw new Error("NullHost can't ask for administrator rights here; start it as administrator.");
+    await this.adminBroker.ensure();
+    this.changed();
+  }
+
+  private currentBlockIndex(): Promise<BlockIndex> {
+    if (!this.blockIndex || Date.now() - this.blockIndex.at > BLOCK_INDEX_MAX_AGE) {
+      const index = this.engine.blockIndex();
+      index.catch(() => (this.blockIndex = null));
+      this.blockIndex = { at: Date.now(), index };
+    }
+    return this.blockIndex.index;
+  }
+
+  /**
+   * When NullHost's own logging ends, or undefined when the log is not NullHost's.
+   * A log switched off elsewhere meanwhile is not NullHost's any more.
+   */
+  private async ownDnsLog(enabled: boolean): Promise<string | undefined> {
+    const until = (await this.desktop()).dnsLogUntil;
+    if (until && !enabled && !this.dnsLogSwitching) {
+      await this.updateDesktop((d) => ({ ...d, dnsLogUntil: undefined }));
+      return undefined;
+    }
+    return until;
+  }
+
+  private async dnsLogView(state: { enabled: boolean } | null, after: number, now = Date.now()): Promise<DnsLogView> {
+    const until = state ? await this.ownDnsLog(state.enabled) : undefined;
+    return {
+      available: state !== null,
+      enabled: state?.enabled ?? false,
+      canSwitch: this.canSwitchDnsLog,
+      admin: this.haveAdmin,
+      ours: until !== undefined,
+      until,
+      overdue: until !== undefined && Date.parse(until) <= now,
+      entries: [],
+      last: after,
+    };
+  }
+
+  /** one action as administrator: here when elevated, else through the helper (its first start prompts) */
+  private async runDnsLog(action: DnsLogAction): Promise<void> {
+    const log = this.o.dnsLog;
+    if (!log) throw new Error("The DNS log is a Windows feature.");
+    if (this.elevated) await log.set(action);
+    else if (this.adminBroker) {
+      if (!this.adminBroker.running) this.progress("Waiting for administrator approval");
+      await this.adminBroker.request("dnslog", { action });
+    } else throw new Error("Switching the DNS log needs administrator rights; start NullHost with them.");
+  }
+
+  private armDnsLogTimer(until: string | undefined): void {
+    clearTimeout(this.dnsLogTimer);
+    if (!until) return;
+    this.dnsLogTimer = setTimeout(() => void this.stopDnsLogIfDue().catch(() => undefined), Math.max(0, Date.parse(until) - Date.now()) + 500);
+    this.dnsLogTimer.unref?.();
+  }
+
+  async dnsLog(after = 0): Promise<DnsLogView> {
+    const log = this.o.dnsLog;
+    if (!log) return this.dnsLogView(null, after);
+    const state = await log.reader.state();
+    const view = await this.dnsLogView(state, after);
+    if (!state) return view;
+    try {
+      const events = await log.reader.read(after, after > 0 ? DNS_LOG_MORE : DNS_LOG_FIRST);
+      if (!events.length) return view;
+      if (events.some((e) => e.pid && !this.processNames.has(e.pid))) {
+        for (const [pid, name] of await log.reader.processes()) this.processNames.set(pid, name);
+      }
+      const index = await this.currentBlockIndex();
+      view.entries = events.map((e) => classify(e, index, this.processNames.get(e.pid)));
+      view.last = Math.max(after, ...events.map((e) => e.record));
+    } catch (err) {
+      view.error = (err as Error).message;
+    }
+    return view;
+  }
+
+  /**
+   * enable: on for `minutes`, then NullHost switches it off again. disable: Stop logging, the
+   * user's own choice, so it works on any log (only the automatic stops are limited to NullHost's
+   * own). clear: empty it.
+   * Returns the state only: the tab keeps reading from where it was (from the start after a clear).
+   */
+  async setDnsLog(action: DnsLogAction, minutes: number = DNS_LOG_MINUTES[0]): Promise<DnsLogView> {
+    const log = this.o.dnsLog;
+    if (!log) throw new Error("The DNS log is a Windows feature.");
+    const before = await log.reader.state();
+    const ours = await this.ownDnsLog(before?.enabled ?? false);
+    if (action === "enable") {
+      if (!(DNS_LOG_MINUTES as readonly number[]).includes(minutes)) throw new Error(`Logging runs for ${DNS_LOG_MINUTES.join(", ")} minutes.`);
+      if (before?.enabled && !ours) throw new Error("The DNS log was switched on outside NullHost, so NullHost leaves it as it is.");
+      const until = new Date(Date.now() + minutes * 60_000).toISOString();
+      // recorded first: if NullHost stops between switching the log on and recording it, it is still NullHost's
+      this.dnsLogSwitching = true;
+      try {
+        await this.updateDesktop((d) => ({ ...d, dnsLogUntil: until }));
+        // already ours: only the time changes, no prompt
+        if (!before?.enabled) await this.runDnsLog("enable");
+      } catch (err) {
+        await this.updateDesktop((d) => ({ ...d, dnsLogUntil: undefined }));
+        throw err;
+      } finally {
+        this.dnsLogSwitching = false;
+      }
+      this.armDnsLogTimer(until);
+    } else if (action === "disable") {
+      await this.runDnsLog("disable");
+      await this.updateDesktop((d) => ({ ...d, dnsLogUntil: undefined }));
+      this.armDnsLogTimer(undefined);
+    } else {
+      await this.runDnsLog(action);
+      this.processNames.clear();
+    }
+    this.changed();
+    return this.dnsLogView(await log.reader.state(), 0);
+  }
+
+  /**
+   * NullHost's logging time is up: switch the log off. Without administrator rights
+   * (the helper not running, e.g. after a restart) nothing pops up: the tab shows it overdue.
+   * Called by the timer, every 30 s by the main process, and once at start.
+   */
+  async stopDnsLogIfDue(now = Date.now()): Promise<boolean> {
+    const log = this.o.dnsLog;
+    if (!log) return false;
+    const until = (await this.desktop()).dnsLogUntil;
+    if (!until) return false;
+    const state = await log.reader.state();
+    if (!state) return false;
+    if (!state.enabled) {
+      await this.ownDnsLog(false);
+      return false;
+    }
+    if (Date.parse(until) > now) {
+      if (!this.dnsLogTimer) this.armDnsLogTimer(until);
+      return false;
+    }
+    if (!this.haveAdmin) return false;
+    await this.runDnsLog("disable");
+    await this.updateDesktop((d) => ({ ...d, dnsLogUntil: undefined }));
+    this.armDnsLogTimer(undefined);
+    this.changed();
+    return true;
+  }
+
+  /** Quitting: switch NullHost's own log off while administrator rights are still there (no prompt on the way out). */
+  async stopDnsLogOnQuit(): Promise<void> {
+    if (!this.o.dnsLog || !this.haveAdmin) return;
+    try {
+      await this.stopDnsLogIfDue(Number.POSITIVE_INFINITY);
+    } catch {
+      /* the next start shows it overdue */
+    }
   }
 
   openBackupFolder(): Promise<void> {

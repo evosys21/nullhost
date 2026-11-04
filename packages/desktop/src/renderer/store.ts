@@ -6,7 +6,7 @@ import { createMockApi } from "./mock";
 export const api: NullhostApi = window.nullhost ?? createMockApi();
 export const isMock = !window.nullhost;
 
-export type Screen = "dashboard" | "sources" | "allowlist" | "editor" | "settings";
+export type Screen = "dashboard" | "sources" | "allowlist" | "editor" | "dnslog" | "settings";
 
 export const store = reactive({
   screen: "dashboard" as Screen,
