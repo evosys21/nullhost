@@ -101,6 +101,8 @@ export interface AppUpdate {
   checkedAt?: string;
   /** the last check failed (offline, GitHub unreachable); nothing is shown for it */
   error?: string;
+  /** this copy can download and install it itself (the installed app or the portable zip, not dev) */
+  canInstall: boolean;
 }
 
 /** Windows' DNS Client log, read after a record number (DNS log tab) */
@@ -187,6 +189,8 @@ export interface NullhostApi {
   checkAppUpdate(): Promise<AppUpdate>;
   /** "Skip this version": no notice until a newer one */
   skipAppUpdate(version: string): Promise<AppUpdate>;
+  /** download the newer version, check its signature, install it and restart (resolves just before NullHost quits) */
+  installAppUpdate(): Promise<void>;
   /** other hosts-file tools running right now, e.g. "HostsMan (hm.exe)" */
   conflicts(): Promise<string[]>;
   /** lookups the DNS Client logged after record `after` (0: the newest few hundred), each marked blocked or not */
@@ -237,6 +241,7 @@ export const API_METHODS = [
   "appUpdate",
   "checkAppUpdate",
   "skipAppUpdate",
+  "installAppUpdate",
   "conflicts",
   "dnsLog",
   "setDnsLog",

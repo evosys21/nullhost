@@ -99,7 +99,30 @@ test("broker and helper over a real named pipe: write, flush, schedule, then sto
   assert.equal(await helperExit, 0, "the helper exits when the app goes away");
   await new Promise((r) => setTimeout(r, 50));
   assert.equal(broker.running, false);
-  assert.deepEqual(states, [true, false]);
+  assert.deepEqual(states, [true], "the stop we asked for (quitting) is not reported: the window may be gone");
+
+  // a late request while quitting (the pause timer, a tray click) must not start a new helper
+  await assert.rejects(broker.request("flush"), /quitting/);
+  assert.equal(launches, 1, "no second helper, no UAC prompt while quitting");
+  assert.deepEqual(states, [true]);
+});
+
+test("close() while the helper is starting: it connects, is let go, and nothing is reported", async () => {
+  const { ctx } = ctxFor(await tempHosts());
+  let helperExit: Promise<number> | undefined;
+  const states: boolean[] = [];
+  const broker = new HelperBroker({
+    launch: async (pipe, token) => {
+      broker.close(); // the app quits while the UAC prompt is up
+      helperExit = runHelper({ pipe, token, ctx });
+    },
+    onState: (running) => states.push(running),
+    connectTimeoutMs: 5_000,
+  });
+  await assert.rejects(broker.request("flush"), /quitting/);
+  assert.equal(await helperExit, 0, "the helper that did start exits");
+  assert.equal(broker.running, false);
+  assert.deepEqual(states, []);
 });
 
 test("a client without the secret is refused; the broker reports a helper that never connects", async () => {

@@ -8,7 +8,7 @@ and leaves everything else in the file alone: your own entries stay exactly
 where they are. Blocking can be switched on, off or paused in a second, from
 the window, the tray or a hotkey.
 
-> **Status:** early (0.1.2), Windows only. The installer and the portable exe are not code-signed,
+> **Status:** early (0.1.3), Windows only. The installer and the portable exe are not code-signed,
 > so Windows SmartScreen will warn before running it.
 
 ## Features
@@ -22,10 +22,10 @@ the window, the tray or a hotkey.
   you whether a name is blocked and by which list.
 - **Daily list updates** through a Windows scheduled task; only changed
   lists are downloaded.
-- **New-version notice:** once a day the app asks GitHub for the latest
-  release and, when there is a newer one, shows where to download it. It never
-  downloads or installs anything by itself, and it can be switched off in
-  Settings.
+- **Updates itself on a click:** once a day the app asks GitHub for the latest
+  release. When there is a newer one it shows an **Update** button, which
+  downloads it, checks its signature and installs it. Nothing is downloaded
+  before you press it, and the check can be switched off in Settings.
 - **Safe writes:** a snapshot is taken before every write, and you can restore
   the previous or the original hosts file at any time. The region is written
   9 hosts per line, which keeps Windows' DNS Client responsive with large lists.
@@ -74,11 +74,24 @@ login and daily list updates. Then press **Update lists**.
 
 ### Updating NullHost
 
-When a new version is out, NullHost shows a notice (and a Windows
-notification once per version) with a link to its release page. Download the
-new installer and run it: it upgrades in place and keeps your settings, the
-snapshots and the blocking. "Update lists" only refreshes the blocklists, not
-the app.
+When a new version is out, NullHost shows a notice with an **Update** button
+(and a Windows notification once per version). Pressing it:
+
+1. downloads `SHA256SUMS.txt` and its signature from the release, and checks the
+   signature against the key built into NullHost;
+2. downloads the installer (or, for the portable copy, the zip) and checks it
+   against that signed checksum;
+3. installs it and starts NullHost again on the new version. The installed app
+   asks for administrator rights once; the portable copy replaces its own folder.
+
+Your settings, the snapshots and the blocking stay. A download whose signature
+or checksum doesn't match is deleted and nothing is installed.
+
+The releases are not code-signed, so this signature is what NullHost trusts: CI
+signs each release's checksums with a key only the repository holds. It guards
+against a changed download, not against someone taking over the repository.
+Versions up to 0.1.2 can't update themselves; install 0.1.3 or newer by hand
+once. "Update lists" only refreshes the blocklists, not the app.
 
 ### Portable copy
 
@@ -93,6 +106,7 @@ its first change, like the installed app. The portable copy differs in a few way
 - **No start at login.** The folder may move or be on a removable drive.
 - **Settings are not in the folder.** They are in `%APPDATA%\NullHost` and
   `%LOCALAPPDATA%\NullHost`, the same as the installed app, so the two share them.
+- **Updating replaces the whole folder**, so keep nothing of your own in it.
 - **To remove it,** press **Remove NullHost from hosts file** under
   Settings, then delete the folder.
 
