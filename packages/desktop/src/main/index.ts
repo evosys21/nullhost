@@ -137,6 +137,7 @@ function createWindow(): void {
       win?.hide();
     }
   });
+  // 'closed' follows every destroy, so `win?.` is the one guard the rest of the file needs
   win.on("closed", () => { win = null; });
   // No navigation away from the app, no new windows; https links open in the browser.
   win.webContents.on("will-navigate", (e) => e.preventDefault());
@@ -205,18 +206,23 @@ async function trayTemplate(): Promise<MenuItemConstructorOptions[]> {
 
 /** Tell the renderer something; a no-op once the window is gone (quitting). */
 function toRenderer(channel: string, ...args: unknown[]): void {
-  if (win && !win.isDestroyed() && !win.webContents.isDestroyed()) win.webContents.send(channel, ...args);
+  win?.webContents.send(channel, ...args);
 }
 
+/** Bring the tray (and the window icon) up to date; never throws, so callers can fire and forget. */
 async function refreshTray(): Promise<void> {
-  if (!tray || tray.isDestroyed()) return;
-  const t = await trayState();
-  const menu = Menu.buildFromTemplate(await trayTemplate());
-  if (tray.isDestroyed()) return;
-  tray.setImage(icon(t.state));
-  tray.setToolTip(t.tip);
-  tray.setContextMenu(menu);
-  if (win && !win.isDestroyed()) win.setIcon(icon(t.state));
+  try {
+    if (!tray) return;
+    const t = await trayState();
+    const menu = Menu.buildFromTemplate(await trayTemplate());
+    if (tray.isDestroyed()) return; // quitting while we awaited
+    tray.setImage(icon(t.state));
+    tray.setToolTip(t.tip);
+    tray.setContextMenu(menu);
+    win?.setIcon(icon(t.state));
+  } catch (err) {
+    console.error((err as Error).message);
+  }
 }
 
 function createTray(): void {

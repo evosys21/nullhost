@@ -181,6 +181,8 @@ export class HelperBroker {
   private starting: Promise<void> | null = null;
   private pending = new Map<number, Pending>();
   private nextId = 1;
+  /** set by close(): the app is quitting, so no new helper and no state reports */
+  private closed = false;
   private readonly o: BrokerOptions;
 
   constructor(o: BrokerOptions) {
@@ -193,6 +195,7 @@ export class HelperBroker {
 
   /** Start the helper if it is not running. One UAC prompt per session. */
   ensure(): Promise<void> {
+    if (this.closed) return Promise.reject(new Error("NullHost is quitting; the administrator helper was stopped"));
     if (this.running) return Promise.resolve();
     this.starting ??= this.start().finally(() => {
       this.starting = null;
@@ -238,6 +241,12 @@ export class HelperBroker {
         timer = setTimeout(() => reject(new Error("the administrator helper did not start in time")), this.o.connectTimeoutMs ?? 120_000);
       });
       const sock = await Promise.race([connected, timeout]);
+      if (this.closed) {
+        // close() ran while the helper was starting: let it go straight away
+        sock.end();
+        sock.destroy();
+        throw new Error("NullHost is quitting; the administrator helper was stopped");
+      }
       this.sock = sock;
       sock.on("close", () => this.onClose());
       this.o.onState?.(true);
@@ -271,7 +280,8 @@ export class HelperBroker {
       p.reject(new Error("the administrator helper stopped"));
     }
     this.pending.clear();
-    this.o.onState?.(false);
+    // a stop we asked for (quitting) is not news; by then the window may be gone
+    if (!this.closed) this.o.onState?.(false);
   }
 
   async request<T>(op: HelperOp, params: Omit<HelperRequest, "id" | "op"> = {}): Promise<T> {
@@ -290,6 +300,7 @@ export class HelperBroker {
 
   /** Stop the helper (the app is quitting). */
   close(): void {
+    this.closed = true;
     this.sock?.end();
     this.sock?.destroy();
   }
