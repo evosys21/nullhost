@@ -23,7 +23,7 @@ import {
   EXPORT_FORMATS,
 } from "@nullhost/core";
 
-export const VERSION = "0.1.3";
+export const VERSION = "0.1.4";
 
 export interface Io {
   out: (s: string) => void;
