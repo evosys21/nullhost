@@ -11,7 +11,10 @@ const SHOWN_MS = 2_000;
 
 /** per toast: the time it has left, and its timer while running */
 const clocks = new Map<number, { left: number; started: number; timer?: number }>();
-let held = false;
+/** the pointer is over the stack, or the keyboard focus is in it: either holds the clocks */
+let pointerIn = false;
+let focusIn = false;
+const held = () => pointerIn || focusIn;
 
 function run(id: number) {
   const c = clocks.get(id);
@@ -39,24 +42,48 @@ watch(
     for (const id of ids) {
       if (clocks.has(id)) continue;
       clocks.set(id, { left: SHOWN_MS, started: 0 });
-      if (!held) run(id);
+      if (!held()) run(id);
     }
   },
   { immediate: true },
 );
-function hold(on: boolean) {
-  held = on;
-  for (const id of clocks.keys()) on ? pause(id) : run(id);
+/** after the pointer or the focus came or went: stop the clocks while either is in, run them when neither is */
+function update(change: () => void) {
+  const before = held();
+  change();
+  if (held() === before) return;
+  for (const id of clocks.keys()) held() ? pause(id) : run(id);
+}
+const setPointer = (on: boolean) => update(() => (pointerIn = on));
+const setFocus = (on: boolean) => update(() => (focusIn = on));
+function onFocusOut(e: FocusEvent) {
+  // moving between two toasts' × buttons stays inside
+  if ((e.currentTarget as Element).contains(e.relatedTarget as Node | null)) return;
+  setFocus(false);
+}
+/** ×: its button, focused, goes with the toast, and some browsers then send no focusout */
+function dismiss(id: number) {
+  setFocus(false);
+  close(id);
 }
 onUnmounted(() => clocks.forEach((c) => window.clearTimeout(c.timer)));
 </script>
 
 <template>
-  <TransitionGroup tag="div" name="toast" class="toast-stack" aria-live="polite" @mouseenter="hold(true)" @mouseleave="hold(false)" @focusin="hold(true)" @focusout="hold(false)">
+  <TransitionGroup
+    tag="div"
+    name="toast"
+    class="toast-stack"
+    aria-live="polite"
+    @mouseenter="setPointer(true)"
+    @mouseleave="setPointer(false)"
+    @focusin="setFocus(true)"
+    @focusout="onFocusOut"
+  >
     <div v-for="t in store.toasts" :key="t.id" class="toast" role="status">
       <Icon name="check" />
       <span class="toast-text">{{ t.text }}</span>
-      <button type="button" class="toast-x" aria-label="Dismiss" @click="close(t.id)"><Icon name="x" /></button>
+      <button type="button" class="close-x" aria-label="Dismiss" @click="dismiss(t.id)"><Icon name="x" /></button>
     </div>
   </TransitionGroup>
 </template>

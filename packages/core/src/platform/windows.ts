@@ -20,12 +20,35 @@ async function exitCode(cmd: string, args: string[], timeoutMs = 10_000): Promis
 /** Process names of other tools known to rewrite the hosts file. */
 export const OTHER_HOSTS_TOOLS: Record<string, string> = { "hm.exe": "HostsMan", "hostsman.exe": "HostsMan", "hostsmanupdater.exe": "HostsMan updater" };
 
+/** `tasklist /FO CSV /NH` -> pid -> image name (exported for tests). */
+export function parseTasklist(csv: string): Map<number, string> {
+  const out = new Map<number, string>();
+  for (const line of csv.split(/\r?\n/)) {
+    const m = /^"([^"]+)","(\d+)"/.exec(line);
+    if (m) out.set(Number(m[2]), m[1]!);
+  }
+  return out;
+}
+
+/** The processes running now, pid -> image name; null when tasklist fails. */
+export async function runningProcesses(): Promise<Map<number, string> | null> {
+  try {
+    return parseTasklist((await run("tasklist", ["/FO", "CSV", "/NH"], { windowsHide: true, timeout: 15_000, maxBuffer: 16 * 1024 * 1024 })).stdout);
+  } catch {
+    return null;
+  }
+}
+
 /** Which known hosts tools appear in `tasklist /FO CSV /NH` output (exported for tests). */
 export function findHostsTools(tasklistCsv: string): string[] {
+  return hostsToolsIn(parseTasklist(tasklistCsv));
+}
+
+function hostsToolsIn(processes: Map<number, string>): string[] {
   const found = new Set<string>();
-  for (const line of tasklistCsv.split(/\r?\n/)) {
-    const name = /^"([^"]+)"/.exec(line)?.[1]?.toLowerCase();
-    if (name && OTHER_HOSTS_TOOLS[name]) found.add(`${OTHER_HOSTS_TOOLS[name]} (${name})`);
+  for (const image of processes.values()) {
+    const name = image.toLowerCase();
+    if (OTHER_HOSTS_TOOLS[name]) found.add(`${OTHER_HOSTS_TOOLS[name]} (${name})`);
   }
   return [...found];
 }
@@ -101,12 +124,8 @@ export function windowsPlatform(env: NodeJS.ProcessEnv = process.env): Platform 
         }
       },
       otherHostsTools: async () => {
-        try {
-          const r = await run("tasklist", ["/FO", "CSV", "/NH"], { windowsHide: true, timeout: 15_000 });
-          return findHostsTools(r.stdout);
-        } catch {
-          return null;
-        }
+        const processes = await runningProcesses();
+        return processes ? hostsToolsIn(processes) : null;
       },
     },
   };

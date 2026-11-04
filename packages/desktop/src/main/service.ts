@@ -49,7 +49,7 @@ export interface ServiceOptions {
   /** native file dialogs for exporting and importing settings; null when cancelled */
   chooseFile?: { save: (defaultName: string) => Promise<string | null>; open: () => Promise<string | null> };
   /** the elevated helper, for an unelevated app that writes the system hosts file */
-  makeBroker?: () => HelperBroker;
+  makeBroker?: (o?: { dnsLogOnly?: boolean }) => HelperBroker;
   /** use the helper even for a copy (tests: exercises the pipe without elevation) */
   forceHelper?: boolean;
   /** the latest NullHost release on GitHub ("1.2.3"); tests pass a fake */
@@ -146,6 +146,8 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
   private dnsLogTimer: NodeJS.Timeout | undefined;
   /** a switch is running (maybe waiting at the UAC prompt): the log being off then is expected */
   private dnsLogSwitching = false;
+  /** desktop.json's dnsLogUntil as last read or written, so quitting can decide without a read */
+  private ownDnsLogUntil: string | undefined;
 
   private constructor(o: ServiceOptions, engine: Engine, elevated: boolean, broker: HelperBroker | null, adminBroker: HelperBroker | null) {
     this.o = o;
@@ -165,8 +167,9 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
     const systemFile = samePath(o.hostsFile ?? platform.systemHostsPath(), platform.systemHostsPath());
     const useHelper = Boolean(o.makeBroker) && !elevated && (systemFile || Boolean(o.forceHelper));
     const broker = useHelper ? o.makeBroker!() : null;
-    // a copy writes without admin, but the DNS log still needs it; this helper never writes the copy
-    const adminBroker = broker ?? (o.makeBroker && !elevated ? o.makeBroker() : null);
+    // a copy writes without admin, but the DNS log still needs it: a helper that does only that,
+    // so working on a copy still can't change the system hosts file
+    const adminBroker = broker ?? (o.makeBroker && !elevated ? o.makeBroker({ dnsLogOnly: true }) : null);
     // the engine's own steps reach the window through Service.progress (wired in the constructor)
     let service: Service | undefined;
     const engine = new Engine({
@@ -622,12 +625,23 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
    * A log switched off elsewhere meanwhile is not NullHost's any more.
    */
   private async ownDnsLog(enabled: boolean): Promise<string | undefined> {
-    const until = (await this.desktop()).dnsLogUntil;
+    const until = (this.ownDnsLogUntil = (await this.desktop()).dnsLogUntil);
     if (until && !enabled && !this.dnsLogSwitching) {
-      await this.updateDesktop((d) => ({ ...d, dnsLogUntil: undefined }));
+      await this.recordDnsLog(undefined);
       return undefined;
     }
     return until;
+  }
+
+  /** NullHost's log runs until this time (undefined: not NullHost's), in desktop.json and in memory */
+  private async recordDnsLog(until: string | undefined): Promise<void> {
+    await this.updateDesktop((d) => ({ ...d, dnsLogUntil: until }));
+    this.ownDnsLogUntil = until;
+  }
+
+  /** Quitting: is there a log of NullHost's to switch off first, with no prompt needed? (sync, for will-quit) */
+  get dnsLogStopOnQuit(): boolean {
+    return Boolean(this.o.dnsLog) && this.haveAdmin && this.ownDnsLogUntil !== undefined;
   }
 
   private async dnsLogView(state: { enabled: boolean } | null, after: number, now = Date.now()): Promise<DnsLogView> {
@@ -668,16 +682,28 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
     if (!log) return this.dnsLogView(null, after);
     const state = await log.reader.state();
     const view = await this.dnsLogView(state, after);
-    if (!state) return view;
+    // off: nothing new can arrive, so after the first read there is nothing to look for
+    if (!state || (!state.enabled && after > 0)) return view;
     try {
-      const events = await log.reader.read(after, after > 0 ? DNS_LOG_MORE : DNS_LOG_FIRST);
+      let events = await log.reader.read(after, after > 0 ? DNS_LOG_MORE : DNS_LOG_FIRST);
+      if (!events.length && after > 0) {
+        // cleared elsewhere (Event Viewer, wevtutil cl): record numbers start again below `after`
+        const newest = await log.reader.read(0, 1);
+        if (newest.length && newest[0]!.record < after) {
+          events = await log.reader.read(0, DNS_LOG_FIRST);
+          view.reset = true;
+        }
+      }
       if (!events.length) return view;
       if (events.some((e) => e.pid && !this.processNames.has(e.pid))) {
-        for (const [pid, name] of await log.reader.processes()) this.processNames.set(pid, name);
+        const running = await log.reader.processes();
+        for (const [pid, name] of running) this.processNames.set(pid, name);
+        // exited before it could be named: remembered as unknown, so tasklist isn't asked again for it
+        for (const e of events) if (e.pid && !running.has(e.pid)) this.processNames.set(e.pid, "");
       }
       const index = await this.currentBlockIndex();
-      view.entries = events.map((e) => classify(e, index, this.processNames.get(e.pid)));
-      view.last = Math.max(after, ...events.map((e) => e.record));
+      view.entries = events.map((e) => classify(e, index, this.processNames.get(e.pid) || undefined));
+      view.last = view.reset ? Math.max(...events.map((e) => e.record)) : Math.max(after, ...events.map((e) => e.record));
     } catch (err) {
       view.error = (err as Error).message;
     }
@@ -705,11 +731,11 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
       // recorded first: if NullHost stops between switching the log on and recording it, it is still NullHost's
       this.dnsLogSwitching = true;
       try {
-        await this.updateDesktop((d) => ({ ...d, dnsLogUntil: until }));
+        await this.recordDnsLog(until);
         // already ours: only the time changes, no prompt
         if (!before?.enabled) await this.runDnsLog("enable");
       } catch (err) {
-        await this.updateDesktop((d) => ({ ...d, dnsLogUntil: undefined }));
+        await this.recordDnsLog(undefined);
         throw err;
       } finally {
         this.dnsLogSwitching = false;
@@ -717,7 +743,7 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
       this.armDnsLogTimer(until);
     } else if (action === "disable") {
       await this.runDnsLog("disable");
-      await this.updateDesktop((d) => ({ ...d, dnsLogUntil: undefined }));
+      await this.recordDnsLog(undefined);
       this.armDnsLogTimer(undefined);
     } else {
       await this.runDnsLog(action);
@@ -735,7 +761,8 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
   async stopDnsLogIfDue(now = Date.now()): Promise<boolean> {
     const log = this.o.dnsLog;
     if (!log) return false;
-    const until = (await this.desktop()).dnsLogUntil;
+    // also fills the in-memory record at start (the main process calls this once then)
+    const until = (this.ownDnsLogUntil = (await this.desktop()).dnsLogUntil);
     if (!until) return false;
     const state = await log.reader.state();
     if (!state) return false;
@@ -749,7 +776,7 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
     }
     if (!this.haveAdmin) return false;
     await this.runDnsLog("disable");
-    await this.updateDesktop((d) => ({ ...d, dnsLogUntil: undefined }));
+    await this.recordDnsLog(undefined);
     this.armDnsLogTimer(undefined);
     this.changed();
     return true;

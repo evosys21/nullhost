@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { DNS_LOG_MINUTES, type DnsLogEntry, type DnsLogView, type DnsVerdict } from "../../shared/api";
 import Banners from "../components/Banners.vue";
 import Icon from "../components/Icon.vue";
-import { act, api, cleanError, fmt, store } from "../store";
+import { act, api, cleanError, fmt, store, untilLabel } from "../store";
 
 // Windows' DNS Client log, read every two seconds while this tab is open.
 const POLL_MS = 2000;
@@ -45,24 +45,30 @@ const STYLES: Record<DnsVerdict, Record<string, string>> = {
 };
 const isBlocked = (v: DnsVerdict) => v === "blocked" || v === "own" || v === "elsewhere";
 
+/** bumped when the rows start over (Clear): a read that began before then is dropped when it lands */
+let generation = 0;
+
 async function poll() {
   if (reading) return;
   reading = true;
+  const started = generation;
   try {
     // a read that never answers would freeze the tab: give up after READ_TIMEOUT_MS and try again on the next poll
     const v = await Promise.race([
       api.dnsLog(after),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`no answer in ${READ_TIMEOUT_MS / 1000} s`)), READ_TIMEOUT_MS)),
     ]);
+    if (started !== generation) return;
     view.value = v;
     readError.value = v.error ?? "";
-    if (v.entries.length && !frozen.value) {
-      after = v.last;
-      // newest first in the table
-      rows.value = [...v.entries.slice().reverse(), ...rows.value].slice(0, KEEP);
-    } else if (!frozen.value) after = v.last;
+    if (frozen.value) return;
+    // cleared outside NullHost: what is shown is gone from the log, and the entries start over
+    if (v.reset) rows.value = [];
+    // newest first in the table
+    if (v.entries.length) rows.value = [...v.entries.slice().reverse(), ...rows.value].slice(0, KEEP);
+    after = v.last;
   } catch (err) {
-    readError.value = cleanError(err);
+    if (started === generation) readError.value = cleanError(err);
   } finally {
     reading = false;
   }
@@ -91,7 +97,7 @@ const left = computed(() => {
   const s = Math.max(0, Math.round((Date.parse(until) - now.value) / 1000));
   return s >= 60 ? `${Math.ceil(s / 60)} min` : `${s} s`;
 });
-const untilTime = computed(() => (view.value?.until ? new Date(view.value.until).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""));
+const untilTime = computed(() => (view.value?.until ? untilLabel(view.value.until) : ""));
 const minutesLabel = (m: number) => (m < 60 ? `${m} minutes` : `${m / 60} hour`);
 const shortLabel = (m: number) => (m < 60 ? `${m} min` : `${m / 60} h`);
 
@@ -133,8 +139,11 @@ async function setLog(action: "enable" | "disable" | "clear") {
   if (!v) return;
   view.value = { ...v, entries: [] };
   if (action === "clear") {
+    generation++;
     rows.value = [];
     after = 0;
+    // a read still under way began before the clear: it is dropped, and this one starts afresh
+    reading = false;
   }
   await poll();
 }
@@ -227,7 +236,7 @@ function detail(r: DnsLogEntry): string {
           Windows doesn't log lookups by default. <strong>Start logging</strong> switches the log on for the time you pick; NullHost switches it off again then, or when you quit it.
           While it's on, the names this PC looks up are recorded in the Windows event log, where other administrators and signed-in users of this PC can read them.
         </span>
-        <button type="button" class="banner-x" aria-label="Close" title="Close" @click="store.dnsLogIntroClosed = true"><Icon name="x" /></button>
+        <button type="button" class="close-x" aria-label="Close" title="Close" @click="store.dnsLogIntroClosed = true"><Icon name="x" /></button>
       </div>
       <!-- while logging: overdue, NullHost's own (with its time), or one it has no record of -->
       <div v-if="view.enabled && view.overdue" class="banner warn" role="status">

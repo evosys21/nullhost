@@ -165,10 +165,11 @@ select.input { padding-right: 8px; }
 .banner.warn { background: var(--warn-soft); color: var(--warn-text); }
 .banner.error { background: var(--danger-soft); color: var(--danger); }
 .banner.ok { background: var(--ok-soft); color: var(--ok-text); }
-/* a banner's own close button (×), top right */
-.banner-x { display: inline-flex; align-items: center; justify-content: center; align-self: flex-start; width: 28px; height: 28px; flex: 0 0 28px; margin: -4px -6px -4px 0; border: 0; border-radius: 6px; background: none; color: inherit; opacity: 0.7; cursor: pointer; }
-.banner-x:hover, .banner-x:focus-visible { opacity: 1; background: color-mix(in srgb, currentColor 12%, transparent); outline: 2px solid transparent; }
-.banner .banner-x svg { width: 14px; height: 14px; flex: 0 0 14px; }
+/* a close button (×) for a toast or a banner; in a banner it sits in the top right corner */
+.close-x { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: 0 0 28px; border: 0; border-radius: 6px; background: none; color: inherit; opacity: 0.7; cursor: pointer; }
+.close-x:hover, .close-x:focus-visible { opacity: 1; background: color-mix(in srgb, currentColor 12%, transparent); outline: 2px solid transparent; }
+.close-x svg, .banner .close-x svg { width: 14px; height: 14px; flex: 0 0 14px; }
+.banner .close-x { align-self: flex-start; margin: -4px -6px -4px 0; }
 .tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 7px; border-radius: 5px; background: var(--hover); color: var(--text-2); white-space: nowrap; }
 .tag.warn { background: var(--warn-soft); color: var(--warn-text); }
 .chg { color: var(--accent-hover); font-weight: 600; font-size: 12px; }
@@ -197,9 +198,6 @@ tr.tier td { background: var(--bg); font-weight: 600; font-size: 13px; color: va
 .toast { display: flex; align-items: center; gap: 10px; max-width: min(460px, calc(100vw - 40px)); padding: 10px 8px 10px 14px; border-radius: 8px; background: var(--toast); color: var(--toast-text); font-size: 13px; box-shadow: 0 8px 24px rgb(0 0 0 / 0.25); }
 .toast > svg { width: 16px; height: 16px; flex: 0 0 16px; color: var(--ok); }
 .toast-text { flex: 1; line-height: 1.4; }
-.toast-x { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: 0 0 28px; border: 0; border-radius: 6px; background: none; color: inherit; opacity: 0.7; cursor: pointer; }
-.toast-x:hover, .toast-x:focus-visible { opacity: 1; background: color-mix(in srgb, currentColor 12%, transparent); outline: none; }
-.toast-x svg { width: 14px; height: 14px; }
 .toast-stack { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 /* in: a quick slide up. out: melts away in place (a slow fade and a slight shrink); it keeps
    its space meanwhile, so its text doesn't reflow, and the stack is anchored at the bottom, so

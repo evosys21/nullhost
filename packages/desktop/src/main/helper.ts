@@ -51,6 +51,8 @@ export interface HelperContext {
   schedule(at: string | null, paths: { dataDir: string; configFile: string; hostsFile?: string }): Promise<ScheduleStatus>;
   /** the DNS Client log only: on, off or clear, nothing else about it */
   dnsLog(action: DnsLogAction): Promise<void>;
+  /** started for an app that works on a copy: only ping and dnslog; it never writes the system hosts file */
+  dnsLogOnly?: boolean;
 }
 
 const TIME = /^([01]?\d|2[0-3]):[0-5]\d$/;
@@ -67,6 +69,7 @@ function safePath(v: unknown, what: string): string {
 export async function handleHelperRequest(raw: unknown, ctx: HelperContext): Promise<unknown> {
   if (!raw || typeof raw !== "object") throw new Error("bad request");
   const req = raw as Partial<HelperRequest>;
+  if (ctx.dnsLogOnly && req.op !== "ping" && req.op !== "dnslog") throw new Error(`this helper only switches the DNS log, not ${String(req.op)}`);
   switch (req.op) {
     case "ping":
       return { pid: process.pid, elevated: ctx.elevated };

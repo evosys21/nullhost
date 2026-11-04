@@ -46,6 +46,19 @@ test("dnslog: only enable, disable or clear reach the context", async () => {
   assert.equal(log.length, 3);
 });
 
+test("a DNS-log-only helper (for an app on a copy) refuses to write, flush or schedule", async () => {
+  const hostsPath = await tempHosts();
+  const { ctx, log } = ctxFor(hostsPath);
+  ctx.dnsLogOnly = true;
+  await assert.rejects(handleHelperRequest({ id: 1, op: "write", content: "# replaced\r\n" }, ctx), /only switches the DNS log/);
+  await assert.rejects(handleHelperRequest({ id: 2, op: "flush" }, ctx), /only switches the DNS log/);
+  await assert.rejects(handleHelperRequest({ id: 3, op: "schedule", at: "07:30", dataDir: "C:\\d", configFile: "C:\\c" }, ctx), /only switches the DNS log/);
+  assert.equal(await readFile(hostsPath, "latin1"), "# hosts\r\n", "the file is untouched");
+  assert.deepEqual(await handleHelperRequest({ id: 4, op: "ping" }, ctx), { pid: process.pid, elevated: false });
+  assert.equal(await handleHelperRequest({ id: 5, op: "dnslog", action: "enable" }, ctx), null);
+  assert.deepEqual(log, ["dnslog enable"]);
+});
+
 test("requests are validated; write always targets the helper's own hosts path", async () => {
   const hostsPath = await tempHosts();
   const { ctx, log } = ctxFor(hostsPath);

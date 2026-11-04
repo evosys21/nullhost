@@ -125,6 +125,8 @@ export interface DnsLogView {
   entries: DnsLogEntry[];
   /** pass this as `after` next time */
   last: number;
+  /** the log was cleared outside NullHost: `entries` start over, drop the rows shown so far */
+  reset?: boolean;
   /** reading failed (shown in the tab) */
   error?: string;
 }

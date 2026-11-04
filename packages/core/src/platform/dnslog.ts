@@ -4,6 +4,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { DNS_LOG_CHANNEL, DNS_LOG_SIZE, DNS_QUERY_COMPLETED, parseDnsEvents, parseLogState, type DnsEvent, type DnsLogState } from "../dnslog.ts";
+import { runningProcesses } from "./windows.ts";
 
 const run = promisify(execFile);
 const opts = { windowsHide: true, timeout: 20_000, maxBuffer: 64 * 1024 * 1024 };
@@ -25,16 +26,6 @@ export function queryArgs(after: number, max: number): string[] {
   return ["qe", DNS_LOG_CHANNEL, `/q:${filter}`, "/rd:true", `/c:${Math.max(1, Math.floor(max))}`, "/f:xml"];
 }
 
-/** `tasklist /FO CSV /NH` -> pid -> image name (exported for tests). */
-export function parseTasklist(csv: string): Map<number, string> {
-  const out = new Map<number, string>();
-  for (const line of csv.split(/\r?\n/)) {
-    const m = /^"([^"]+)","(\d+)"/.exec(line);
-    if (m) out.set(Number(m[2]), m[1]!);
-  }
-  return out;
-}
-
 export const windowsDnsLog: DnsLogReader = {
   async state() {
     try {
@@ -49,11 +40,7 @@ export const windowsDnsLog: DnsLogReader = {
     return parseDnsEvents(r.stdout).reverse();
   },
   async processes() {
-    try {
-      return parseTasklist((await run("tasklist", ["/FO", "CSV", "/NH"], opts)).stdout);
-    } catch {
-      return new Map();
-    }
+    return (await runningProcesses()) ?? new Map();
   },
 };
 
