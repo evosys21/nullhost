@@ -137,6 +137,7 @@ function createWindow(): void {
       win?.hide();
     }
   });
+  win.on("closed", () => { win = null; });
   // No navigation away from the app, no new windows; https links open in the browser.
   win.webContents.on("will-navigate", (e) => e.preventDefault());
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -202,13 +203,20 @@ async function trayTemplate(): Promise<MenuItemConstructorOptions[]> {
   ];
 }
 
+/** Tell the renderer something; a no-op once the window is gone (quitting). */
+function toRenderer(channel: string, ...args: unknown[]): void {
+  if (win && !win.isDestroyed() && !win.webContents.isDestroyed()) win.webContents.send(channel, ...args);
+}
+
 async function refreshTray(): Promise<void> {
-  if (!tray) return;
+  if (!tray || tray.isDestroyed()) return;
   const t = await trayState();
+  const menu = Menu.buildFromTemplate(await trayTemplate());
+  if (tray.isDestroyed()) return;
   tray.setImage(icon(t.state));
   tray.setToolTip(t.tip);
-  tray.setContextMenu(Menu.buildFromTemplate(await trayTemplate()));
-  win?.setIcon(icon(t.state));
+  tray.setContextMenu(menu);
+  if (win && !win.isDestroyed()) win.setIcon(icon(t.state));
 }
 
 function createTray(): void {
@@ -452,9 +460,9 @@ async function main(): Promise<void> {
   await service.registerSavedHotkey();
   service.onChange(() => {
     void refreshTray();
-    win?.webContents.send(CHANGED_EVENT);
+    toRenderer(CHANGED_EVENT);
   });
-  service.onProgress((step) => win?.webContents.send(PROGRESS_EVENT, step));
+  service.onProgress((step) => toRenderer(PROGRESS_EVENT, step));
   // the pause timer, and noticing writes by the scheduled update or the CLI
   let seen = "";
   const fingerprint = async () => {
@@ -469,7 +477,7 @@ async function main(): Promise<void> {
       if (now !== seen) {
         seen = now;
         void refreshTray();
-        win?.webContents.send(CHANGED_EVENT);
+        toRenderer(CHANGED_EVENT);
       }
     })().catch((err: Error) => console.error(err.message));
   setInterval(tick, 30_000);
