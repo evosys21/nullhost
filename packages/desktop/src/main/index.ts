@@ -252,8 +252,11 @@ async function applyUpdate(f: VerifiedFile): Promise<void> {
   if (portable) {
     const script = join(dirname(f.path), "swap.ps1");
     const failedLog = join(dirname(f.path), SWAP_FAILED);
-    await writeFile(script, portableSwapScript({ pid: process.pid, zip: f.path, appDir: dirname(process.execPath), exe: process.execPath, failedLog }), "utf8");
-    spawn("powershell", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", script], { detached: true, stdio: "ignore", windowsHide: true }).unref();
+    const appDir = dirname(process.execPath);
+    // the BOM makes Windows PowerShell read it as UTF-8 (non-ASCII user or folder names)
+    await writeFile(script, "﻿" + portableSwapScript({ pid: process.pid, zip: f.path, appDir, exe: process.execPath, failedLog }), "utf8");
+    // started from the folder's parent: a process standing in the folder would keep it in use
+    spawn("powershell", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", script], { cwd: dirname(appDir), detached: true, stdio: "ignore", windowsHide: true }).unref();
   } else {
     const elevated = encodePowerShell(elevatedInstallScript({ file: f.path, sha256: f.sha256, folder: `NullHost-update-${randomBytes(8).toString("hex")}` }));
     const start = `Start-Process -FilePath 'powershell.exe' -ArgumentList ${psQuote(`-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand ${elevated}`)} -Verb RunAs -WindowStyle Hidden`;
