@@ -19,11 +19,24 @@ export {
 } from "./render.ts";
 export { fetchSource, fetchErrorMessage, isRemote, type FetchOutcome, type FetchOptions } from "./fetch.ts";
 export { BUILTIN_CATALOG, recommendedIds, validateCatalog, type Catalog } from "./catalog.ts";
-export { doctor, type Check, type CheckLevel, type ScheduleStatus } from "./doctor.ts";
+export { doctor, reloadCheck, type Check, type CheckLevel, type ScheduleStatus } from "./doctor.ts";
 export { exportList, EXPORT_FORMATS, type ExportFormat } from "./export.ts";
 export { withFileLock, BusyError, type LockOptions } from "./lock.ts";
 export { configText, defaultConfig, loadConfig, parseConfig, saveConfig, userSourceId, DEFAULT_BUDGET } from "./config.ts";
 export { defaultState, loadState, saveState } from "./state.ts";
+export {
+  RELOAD_KEEP,
+  RELOAD_MIN_HOSTS,
+  RELOAD_TARGET_MS,
+  RELOAD_TIMEOUT_MS,
+  RELOAD_WARN_MS,
+  addSample,
+  measureReload,
+  pickProbe,
+  reloadCost,
+  type ReloadCost,
+  type ReloadProbe,
+} from "./reload.ts";
 export { Snapshots, type SnapshotInfo } from "./snapshots.ts";
 export { planTidy, type TidyPlan } from "./tidy.ts";
 export {

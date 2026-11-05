@@ -116,7 +116,9 @@ function describeWrite(w: WriteOutcome | undefined): string {
   if (!w || !w.changed) return "hosts file unchanged (no DNS reload)";
   const wait = w.report && w.report.waitedMs > 0 ? `, waited ${Math.round(w.report.waitedMs / 100) / 10} s for the lock` : "";
   const flush = w.flushed ? ", DNS cache flushed" : w.flushError ? `, DNS flush failed: ${w.flushError}` : "";
-  return `hosts file written${wait}${flush}`;
+  const r = w.reload;
+  const reload = r ? (r.timedOut ? `; the DNS Client did not answer from it within ${Math.round(r.ms / 1000)} s` : `; the DNS Client reloaded it in ${(r.ms / 1000).toFixed(1)} s`) : "";
+  return `hosts file written${wait}${flush}${reload}`;
 }
 
 function printApply(io: Io, r: ApplyResult, label: string): void {
@@ -144,8 +146,14 @@ function printStatus(io: Io, s: Status): void {
   io.out(`  allowlist      ${s.config.allowlist} pattern(s); budget ${fmt(s.config.budget)} hosts`);
   if (s.lastUpdate) io.out(`  last update    ${s.lastUpdate.at} (${fmt(s.lastUpdate.hosts)} hosts)`);
   if (s.lastApply) io.out(`  last write     ${s.lastApply.at} (${s.lastApply.mode}, ${fmt(s.lastApply.hosts)} hosts)`);
+  if (s.reload) {
+    const l = s.reload.last;
+    const cost = s.reload.perHostMs !== undefined ? `; ~${((s.reload.perHostMs * 10_000) / 1000).toFixed(1)} s per 10,000 hosts, suggested budget ${fmt(s.reload.suggestedBudget ?? 0)}` : "";
+    io.out(`  DNS reload     ${l.timedOut ? `no answer within ${Math.round(l.ms / 1000)} s` : `${(l.ms / 1000).toFixed(1)} s`} for ${fmt(l.hosts)} hosts at ${l.at}${cost}`);
+  }
   io.out(`  snapshots      ${s.snapshots}${s.hasOriginal ? " + original" : ""}`);
   if (s.leftovers.hosts) io.err(`note: ${fmt(s.leftovers.hosts)} old block entries outside the region are already covered by NullHost (HostsMan leftovers?); preview with: nullhost tidy --dry-run`);
+  if (s.reload?.slow) io.err("warning: the DNS Client's last reload of the hosts file was slow; see: nullhost doctor");
   if (s.region.modifiedExternally) io.err("warning: the managed region was changed by something else since NullHost wrote it");
   if (s.region.count > 1) io.err(`warning: ${s.region.count} managed regions found; the next write merges them into one`);
   if (s.region.unterminated) io.err("warning: NullHost's start and end markers do not pair up; NullHost does not write the file until they are fixed (edit the file, or: nullhost restore previous)");

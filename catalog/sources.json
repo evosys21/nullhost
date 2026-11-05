@@ -1,6 +1,6 @@
 {
-  "version": "2026-10-26",
-  "notes": "Seed catalog. 'verified' = fetched and parsed successfully by the M0 spike on that date. Tiers: recommended = on after install; stricter and optional = off. HaGeZi Multi is listed so the entry budget can refuse it visibly: 365k hosts in hosts format is over the Windows ceiling.",
+  "version": "2026-11-05",
+  "notes": "Seed catalog. 'verified' = fetched and parsed successfully by the M0 spike on that date. Tiers: recommended = on after install; stricter and optional = off. Recommended stays under the Windows default budget of 10k (AdAway + Pete Lowe: 9,835 unique on 2026-11-02). StevenBlack unified and HaGeZi Multi are listed so the ceiling can refuse them visibly on Windows.",
   "sources": [
     {
       "id": "stevenblack",
@@ -8,9 +8,10 @@
       "url": "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
       "format": "hosts",
       "licence": "MIT",
-      "tier": "recommended",
+      "tier": "stricter",
       "category": "ads + malware",
-      "verified": "2026-10-26"
+      "verified": "2026-10-26",
+      "warning": "About 78k hosts: over the Windows hard ceiling on its own (a 25 s DNS stall per reload on Windows 11 26H2)."
     },
     {
       "id": "adaway",
