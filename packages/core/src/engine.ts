@@ -26,9 +26,8 @@ import {
 import { withFileLock } from "./lock.ts";
 import { Snapshots } from "./snapshots.ts";
 import { planTidy, type TidyPlan } from "./tidy.ts";
-import { addSample, measureReload, pickProbe, RELOAD_TIMEOUT_MS, reloadCost, type ReloadCost } from "./reload.ts";
 import { loadState, saveState } from "./state.ts";
-import type { Blocking, Config, ReloadSample, Source, SourceFormat, SourceRun, State } from "./types.ts";
+import type { Blocking, Config, Source, SourceFormat, SourceRun, State } from "./types.ts";
 
 export interface EngineOptions {
   platform: Platform;
@@ -41,10 +40,6 @@ export interface EngineOptions {
   snapshotsToKeep?: number;
   /** flush the resolver cache after writes; default: only when writing the system hosts file */
   flush?: boolean;
-  /** time the resolver's reload after writes (needs `platform.resolve`); default: only when writing the system hosts file */
-  measureReload?: boolean;
-  /** give up waiting for the reload after this long (default RELOAD_TIMEOUT_MS) */
-  reloadTimeoutMs?: number;
   /** each step of a long operation, in words ("Downloading AdAway (2 of 3)"); the desktop shows it */
   onProgress?: (step: string) => void;
 }
@@ -80,8 +75,6 @@ export interface WriteOutcome {
   report?: WriteReport;
   flushed: boolean;
   flushError?: string;
-  /** how long the DNS Client took to answer from the new file (also kept in state.json) */
-  reload?: ReloadSample;
 }
 
 export interface ApplyResult {
@@ -133,8 +126,6 @@ export interface Status {
   lastUpdate?: State["lastUpdate"];
   lastApply?: State["lastApply"];
   cachedRegion?: State["cachedRegion"];
-  /** measured DNS Client reload cost on this PC; missing until a write was timed */
-  reload?: ReloadCost;
   snapshots: number;
   hasOriginal: boolean;
 }
@@ -186,8 +177,6 @@ export class Engine {
   private readonly now: () => Date;
   private readonly fetchImpl?: typeof fetch;
   private readonly flush: boolean;
-  private readonly measure: boolean;
-  private readonly reloadTimeoutMs: number;
   private readonly inLock = new AsyncLocalStorage<true>();
   /** see EngineOptions.onProgress; may be set after construction */
   onProgress?: (step: string) => void;
@@ -201,8 +190,6 @@ export class Engine {
     this.now = o.now ?? (() => new Date());
     this.fetchImpl = o.fetchImpl;
     this.flush = o.flush ?? this.isSystemFile;
-    this.measure = (o.measureReload ?? this.isSystemFile) && typeof o.platform.resolve === "function";
-    this.reloadTimeoutMs = o.reloadTimeoutMs ?? RELOAD_TIMEOUT_MS;
     this.onProgress = o.onProgress;
     this.snapshots = new Snapshots(o.paths.snapshotDir, o.snapshotsToKeep ?? 10, this.now);
     // Every operation that writes the hosts file or state.json takes the cross-process
@@ -230,11 +217,8 @@ export class Engine {
 
   // ---------------------------------------------------------------- config
 
-  async config(): Promise<Config> {
-    const c = await loadConfig(this.paths.configFile, this.catalog);
-    // a budget saved before the ceiling was lowered (150k on Windows until 2026-11-05) caps at the ceiling
-    if (c.budget > this.platform.hardCeiling) c.budget = this.platform.hardCeiling;
-    return c;
+  config(): Promise<Config> {
+    return loadConfig(this.paths.configFile, this.catalog);
   }
 
   saveConfig(c: Config): Promise<void> {
@@ -530,12 +514,12 @@ export class Engine {
     const current = this.checkMarkers(await this.platform.readHosts(this.hostsFile));
     const existing = extractRegion(current);
     if (existing && findRegions(current).length === 1 && regionBody(existing) === regionBody(region)) {
-      // same hosts, same sources: skip the write, so Windows does not reload (26H2: ~0.3 ms DNS stall per host per write)
+      // same hosts, same sources: skip the write, so Windows does not reload (M0: ~3 s DNS stall per write)
       result.write = { changed: false, flushed: false };
       await saveState(this.paths.stateFile, st);
       return result;
     }
-    result.write = await this.writeHosts(current, compose(current, region, this.platform.eol), reason, st);
+    result.write = await this.writeHosts(current, compose(current, region, this.platform.eol), reason);
     result.written = result.write.changed;
     st.regionHash = sha(region);
     st.lastApply = { at: this.now().toISOString(), hosts: b.hosts.length, lines, mode: "enabled" };
@@ -588,7 +572,7 @@ export class Engine {
 
   private async writeRegionAndState(region: string, st: State, reason: string): Promise<WriteOutcome> {
     const current = this.checkMarkers(await this.platform.readHosts(this.hostsFile));
-    const out = await this.writeHosts(current, compose(current, region, this.platform.eol), reason, st);
+    const out = await this.writeHosts(current, compose(current, region, this.platform.eol), reason);
     st.regionHash = sha(region);
     const hosts = regionHosts(region).length;
     st.lastApply = { at: this.now().toISOString(), hosts, lines: region.split(this.platform.eol).length - 1, mode: st.blocking.mode };
@@ -678,17 +662,11 @@ export class Engine {
     return text;
   }
 
-  /**
-   * Write `next` (snapshot first), flush, and time the DNS Client's reload.
-   * The reload sample goes into `st` when the caller saves a state it loaded
-   * before the write (so its save keeps the sample); otherwise into state.json here.
-   */
-  private async writeHosts(current: string, next: string, reason: string, st?: State): Promise<WriteOutcome> {
+  private async writeHosts(current: string, next: string, reason: string): Promise<WriteOutcome> {
     if (current === next) return { changed: false, flushed: false };
     const snapshot = await this.snapshots.take(current, reason);
     this.progress("Writing the hosts file");
     const report = await this.platform.writeHosts(this.hostsFile, next);
-    const writtenAt = this.now().getTime();
     const out: WriteOutcome = { changed: true, snapshot, report, flushed: false };
     if (this.flush) {
       this.progress("Flushing the DNS cache");
@@ -699,37 +677,7 @@ export class Engine {
         out.flushError = (err as Error).message;
       }
     }
-    out.reload = await this.timeReload(current, next, writtenAt);
-    if (out.reload) {
-      if (st) st.reloads = addSample(st.reloads, out.reload);
-      else {
-        const s = await this.state();
-        s.reloads = addSample(s.reloads, out.reload);
-        await saveState(this.paths.stateFile, s);
-      }
-    }
     return out;
-  }
-
-  /** How long after the write the resolver answered from the new file; undefined when not measured. */
-  private async timeReload(current: string, next: string, writtenAt: number): Promise<ReloadSample | undefined> {
-    const resolve = this.platform.resolve;
-    if (!this.measure || !resolve) return undefined;
-    const hostsOf = (t: string) => {
-      const r = extractRegion(t);
-      return r ? regionHosts(r) : [];
-    };
-    const probe = pickProbe(hostsOf(current), hostsOf(next));
-    if (!probe) return undefined; // no blocked name changed: nothing tells the old table from the new one
-    this.progress("Waiting for Windows to reload the hosts file");
-    const m = await measureReload((h) => resolve.call(this.platform, h), probe, {
-      startedAt: writtenAt,
-      clock: () => this.now().getTime(),
-      timeoutMs: this.reloadTimeoutMs,
-    });
-    const sample: ReloadSample = { at: new Date(writtenAt).toISOString(), ms: m.ms, hosts: parseHosts(next).hosts.length, probe: probe.host };
-    if (m.timedOut) sample.timedOut = true;
-    return sample;
   }
 
   // ---------------------------------------------------------------- export
@@ -808,7 +756,6 @@ export class Engine {
       lastUpdate: st.lastUpdate,
       lastApply: st.lastApply,
       cachedRegion: st.cachedRegion,
-      reload: reloadCost(st.reloads, this.platform.hardCeiling),
       snapshots: (await this.snapshots.list()).length,
       hasOriginal: (await this.snapshots.original()) !== null,
     };

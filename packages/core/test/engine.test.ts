@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { appendFile, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { appendFile, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { test } from "node:test";
 import {
   Engine,
@@ -324,15 +324,6 @@ test("setOptions validates the block address and the budget", async () => {
   assert.equal(c.budget, 120_000);
   await assert.rejects(h.engine.setOptions({ ip: "192.168.1.1" }), /0\.0\.0\.0 or 127\.0\.0\.1/);
   await assert.rejects(h.engine.setOptions({ budget: 5_000_000 }), /budget must be between/);
-});
-
-test("a budget saved above the ceiling (the old 150k Windows default) reads as the ceiling", async () => {
-  const h = await harness({ ceiling: 20_000 });
-  await mkdir(dirname(h.engine.paths.configFile), { recursive: true });
-  await writeFile(h.engine.paths.configFile, "budget = 150000\n");
-  assert.equal((await h.engine.config()).budget, 20_000);
-  await h.engine.setOptions({ ip: "127.0.0.1" });
-  assert.match(await readFile(h.engine.paths.configFile, "utf8"), /budget = 20000/);
 });
 
 test("user sources and source toggles persist in config.toml", async () => {

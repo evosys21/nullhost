@@ -135,8 +135,7 @@ async function removeRegion() {
           </select>
         </div>
         <form class="f" @submit.prevent="saveSetting('Saving', { budget: Number(budget) }, 'Budget saved.')">
-          <div>Entry budget<div class="hint">warn above this many hosts; refused above {{ fmt(set.hardCeiling) }}</div>
-            <div v-if="st?.reload?.perHostMs !== undefined" class="hint">measured on this PC: about {{ (st.reload.perHostMs * 10).toFixed(1) }} s of DNS stall per 10,000 hosts per write; {{ fmt(st.reload.suggestedBudget) }} keeps it near 3 s</div></div>
+          <div>Entry budget<div class="hint">warn above this many hosts; refused above {{ fmt(set.hardCeiling) }}</div></div>
           <span style="display: flex; gap: 8px"><input v-model.number="budget" type="number" min="1000" :max="set.hardCeiling" step="1000" class="input sm mono" style="width: 120px" aria-label="Entry budget" /><button class="btn sm" type="submit">Save</button></span>
         </form>
         <div class="f"><div class="muted">Always on Windows: 9 hosts per line, CRLF, source attribution in the file header</div></div>

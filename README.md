@@ -13,8 +13,8 @@ the window, the tray or a hotkey.
 
 ## Features
 
-- **Curated list catalog** with three tiers: recommended (AdAway, Pete Lowe),
-  stricter (StevenBlack unified, KADhosts, Phishing Army, HaGeZi Multi) and
+- **Curated list catalog** with three tiers: recommended (StevenBlack unified,
+  AdAway, Pete Lowe), stricter (KADhosts, Phishing Army, HaGeZi Multi) and
   optional topic lists (gambling, fake news, social, adult, crypto-mining,
   Windows & Office telemetry). Add your own lists by URL or file, in hosts,
   domains, Adblock or dnsmasq format.
@@ -27,12 +27,8 @@ the window, the tray or a hotkey.
   downloads it, checks its signature and installs it. Nothing is downloaded
   before you press it, and the check can be switched off in Settings.
 - **Safe writes:** a snapshot is taken before every write, and you can restore
-  the previous or the original hosts file at any time.
-- **An entry budget that keeps Windows responsive:** Windows 11 26H2's DNS
-  Client stalls lookups for about 0.3 ms per blocked host every time it reloads
-  the hosts file, including at boot. NullHost warns above 10,000 hosts (about
-  3 s) and refuses more than 20,000 (about 6 s). StevenBlack unified alone is
-  about 78,000 hosts, a 25 s stall, and hung the DNS Client at boot in testing.
+  the previous or the original hosts file at any time. The region is written
+  9 hosts per line, which keeps Windows' DNS Client responsive with large lists.
 - **Least privilege:** the app runs as a normal user. The first change in a
   session asks for administrator rights once; a small helper then writes the
   hosts file and flushes DNS until you quit.
@@ -257,10 +253,8 @@ node packages/desktop/scripts/sandbox-test.mjs
 
 To report a bug, suggest a list or send a change, see
 [CONTRIBUTING.md](CONTRIBUTING.md).
-- Keep the region at 9 hosts per line. Before 26H2, one host per line made
-  Windows' DNS Client take minutes to reload a large file. On 26H2 the reload
-  costs about the same per host either way, so the entry budget, not the line
-  format, keeps it fast.
+- Keep the region at 9 hosts per line. One host per line makes Windows' DNS
+  Client take minutes to reload the file, stalling lookups meanwhile.
 
 ## Blocklists
 

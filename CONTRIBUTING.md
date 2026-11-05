@@ -23,9 +23,8 @@ list should be:
 - Public, maintained, and downloadable over HTTPS.
 - Under a licence that allows redistribution, stated in the entry.
 - In a format NullHost reads: hosts, domains, Adblock or dnsmasq.
-- Small enough for the hosts file. Windows' DNS Client stalls lookups for about
-  0.3 ms per host on every reload, so NullHost refuses more than 20,000 hosts on
-  Windows. `recommended` lists together must stay under the 10,000 default budget.
+- Small enough for the hosts file. Windows' DNS Client slows down badly with
+  very large files, so huge lists may be refused by the entry budget.
 
 Each entry has an `id`, `name`, `url`, `format`, `licence`, `tier`
 (`recommended`, `stricter` or `optional`), `category` and the date you

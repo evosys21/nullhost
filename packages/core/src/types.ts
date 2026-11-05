@@ -59,20 +59,6 @@ export interface State {
   regionHash?: string;
   /** the last rendered enabled region (cached in region.txt) */
   cachedRegion?: { builtAt: string; hosts: number; lines: number };
-  /** DNS Client reload times after recent writes, oldest first (see reload.ts) */
-  reloads?: ReloadSample[];
-}
-
-/** One timed reload: from the end of a hosts-file write until the resolver answered from the new file. */
-export interface ReloadSample {
-  at: string;
-  ms: number;
-  /** host names in the whole file (the cost is per host, inside the region or not) */
-  hosts: number;
-  /** the name that was looked up */
-  probe: string;
-  /** no answer from the new file within the timeout; `ms` is the timeout */
-  timedOut?: boolean;
 }
 
 export interface ParseStats {

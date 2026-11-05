@@ -18,7 +18,7 @@ import net from "node:net";
 import type { DnsLogAction, ScheduleStatus, WriteReport } from "@nullhost/core";
 
 export const PIPE_PREFIX = "\\\\.\\pipe\\nullhost-";
-/** far larger than any hosts file NullHost writes (a 180k-host file is about 7 MB) */
+/** larger than any hosts file under the 180k-host ceiling (about 7 MB) */
 export const MAX_CONTENT = 32 * 1024 * 1024;
 
 export type HelperOp = "ping" | "write" | "flush" | "schedule" | "dnslog";

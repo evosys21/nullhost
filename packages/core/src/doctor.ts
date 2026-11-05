@@ -1,7 +1,6 @@
 import { lookup } from "node:dns/promises";
 import { stat } from "node:fs/promises";
 import type { Engine } from "./engine.ts";
-import { RELOAD_TARGET_MS, RELOAD_WARN_MS, seconds, withTimeout, type ReloadCost } from "./reload.ts";
 import { extractRegion, findRegions, regionHosts } from "./render.ts";
 
 export type CheckLevel = "ok" | "info" | "warn" | "error";
@@ -27,32 +26,9 @@ export interface ScheduleStatus {
 }
 
 const DAY = 24 * 3600_000;
-const n = (x: number) => x.toLocaleString("en-US");
 
-/** The measured DNS Client reload, from state.json (see reload.ts). */
-export function reloadCheck(cost: ReloadCost | undefined, budget: number): Check | null {
-  const label = "DNS Client reload after a write";
-  if (!cost) return null;
-  const { last } = cost;
-  const took = last.timedOut ? `no answer from the new file within ${seconds(last.ms)}` : `${seconds(last.ms)}`;
-  let detail = `last write: ${took} for ${n(last.hosts)} hosts`;
-  if (cost.perHostMs !== undefined && cost.suggestedBudget !== undefined) {
-    detail += `; about ${seconds(cost.perHostMs * 10_000)} per 10,000 hosts on this PC, so a budget of ${n(cost.suggestedBudget)} keeps a reload near ${seconds(RELOAD_TARGET_MS)}`;
-  }
-  const suggest = cost.suggestedBudget !== undefined && cost.suggestedBudget < budget ? cost.suggestedBudget : undefined;
-  if (cost.slow) {
-    return {
-      id: "reload",
-      level: "warn",
-      label,
-      detail,
-      fix: `${suggest !== undefined ? `Lower the entry budget to ${n(suggest)} (Settings) and turn` : "Turn"} off a large source. Each write, and each reload at boot, stalls name resolution this long; over ${seconds(RELOAD_WARN_MS)} the boot-time reloads can hang the DNS Client.`,
-    };
-  }
-  if (suggest !== undefined) {
-    return { id: "reload", level: "info", label, detail, fix: `The budget of ${n(budget)} would let a reload take about ${seconds((cost.perHostMs ?? 0) * budget)} here; ${n(suggest)} keeps it near ${seconds(RELOAD_TARGET_MS)}.` };
-  }
-  return { id: "reload", level: "ok", label, detail };
+async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | "timeout"> {
+  return Promise.race([p, new Promise<"timeout">((r) => setTimeout(() => r("timeout"), ms))]);
 }
 
 /**
@@ -134,12 +110,6 @@ export async function doctor(
   const cfg = await engine.config();
   if (r.hosts > cfg.budget) {
     add({ id: "budget", level: "warn", label: "Entry budget", detail: `${r.hosts.toLocaleString("en-US")} hosts, budget ${cfg.budget.toLocaleString("en-US")}`, fix: "Turn off a large source; each update stalls DNS longer." });
-  }
-
-  const reload = reloadCheck(st.reload, cfg.budget);
-  if (reload) add(reload);
-  else if (engine.isSystemFile && p.resolve) {
-    add({ id: "reload", level: "info", label: "DNS Client reload after a write", detail: "not measured yet: NullHost times it after its next write that changes the blocked names" });
   }
 
   const last = st.lastUpdate?.at;

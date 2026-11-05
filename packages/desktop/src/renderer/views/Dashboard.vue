@@ -27,12 +27,6 @@ const warnings = computed(() => {
   if (r && r.count > 1) w.push(`${r.count} NullHost regions found in the hosts file; the next write merges them.`);
   if (r?.unterminated) w.push("NullHost's start and end markers in the hosts file do not pair up, so NullHost does not write the file. Fix the marker lines in the Editor, or restore a snapshot in Settings.");
   if (s.value && !r?.present && mode.value === "enabled" && s.value.lastApply) w.push("NullHost's region is missing from the hosts file. Apply to write it again.");
-  const rl = s.value?.reload;
-  if (rl?.slow) {
-    const took = rl.last.timedOut ? "did not answer from it within a minute" : `took ${(rl.last.ms / 1000).toFixed(1)} s to reload it`;
-    const fix = rl.suggestedBudget !== undefined && rl.suggestedBudget < (s.value?.config.budget ?? Infinity) ? ` Lower the entry budget to ${fmt(rl.suggestedBudget)} in Settings, or turn off a large list.` : " Turn off a large list.";
-    w.push(`After the last write of the hosts file (${fmt(rl.last.hosts)} hosts), Windows' DNS Client ${took}. Name resolution stalls that long on every write and every reload at boot.${fix}`);
-  }
   for (const x of store.lastResult?.warnings ?? []) w.push(x);
   return w;
 });

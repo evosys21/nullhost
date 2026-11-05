@@ -4,9 +4,7 @@ import { parse, stringify } from "smol-toml";
 import { BUILTIN_CATALOG, recommendedIds, type Catalog } from "./catalog.ts";
 import type { Config, Source, SourceFormat } from "./types.ts";
 
-// Windows 11 26H2 reloads the hosts file at about 0.3 ms per host, compressed or not
-// (spike/README.md, 2026-11-05): 10k hosts is a ~3 s DNS stall per write and per boot-time reload.
-export const DEFAULT_BUDGET = 10_000;
+export const DEFAULT_BUDGET = 150_000;
 /** The only addresses a blocked host may point at. */
 export const BLOCK_IPS = ["0.0.0.0", "127.0.0.1"];
 

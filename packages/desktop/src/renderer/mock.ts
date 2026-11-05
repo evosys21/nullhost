@@ -12,7 +12,7 @@ export function createMockApi(): NullhostApi {
   const at = new Date(Date.now() - 2 * 3600_000).toISOString();
   const run = (kept: number, added?: number, removed?: number) => ({ from: "network" as const, at, bytes: 0, parsed: kept, kept, unique: kept, added, removed });
   let sources: SourceView[] = [
-    { id: "stevenblack", name: "StevenBlack unified", url: "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts", format: "hosts", licence: "MIT", tier: "stricter", category: "ads + malware", enabled: false, lastRun: run(74_480, 298, 37) },
+    { id: "stevenblack", name: "StevenBlack unified", url: "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts", format: "hosts", licence: "MIT", tier: "recommended", category: "ads + malware", enabled: true, lastRun: run(74_480, 298, 37) },
     { id: "adaway", name: "AdAway official", url: "https://adaway.org/hosts.txt", format: "hosts", licence: "CC BY 3.0", tier: "recommended", category: "mobile ads", enabled: true, lastRun: run(6_540, 14, 4) },
     { id: "petelowe", name: "Pete Lowe (pgl.yoyo.org)", url: "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts", format: "hosts", licence: "MCRAE", tier: "recommended", category: "ads", enabled: true, lastRun: run(3_563, 0, 0) },
     { id: "kadhosts", name: "KADhosts", url: "https://raw.githubusercontent.com/PolishFiltersTeam/KADhosts/master/KADhosts.txt", format: "hosts", licence: "CC BY-SA 4.0", tier: "stricter", category: "scam + fraud", enabled: false },
@@ -28,7 +28,7 @@ export function createMockApi(): NullhostApi {
     "0.0.0.0 a-ads.com a.adroll.com a.mobtrks.com a.opttimal.com a.sakh.com a.yieldmo.com a2.adform.net a22.adform.net ad.360yield.com\r\n0.0.0.0 ad.doubleclick.net ad.adview.cn ad.afy11.net ad.agkn.com ad.amgdgt.com ad.atdmt.com ad.duga.jp ad.foxnetworks.com ad.gt\r\n" +
     "# <<< nullhost managed <<<\r\n";
   let schedule: import("../shared/api").ScheduleStatus = { installed: true, available: true, at: "07:30", lastRun: new Date(Date.now() - 6 * 3600_000).toISOString(), lastResult: 0, nextRun: new Date(Date.now() + 18 * 3600_000).toISOString() };
-  let settings: DesktopSettings = { theme: "system", startAtLogin: true, startAtLoginAvailable: true, hotkey: "Control+Alt+H", hotkeyRegistered: true, ip: "0.0.0.0", budget: 10_000, hardCeiling: 20_000, checkAppUpdates: true };
+  let settings: DesktopSettings = { theme: "system", startAtLogin: true, startAtLoginAvailable: true, hotkey: "Control+Alt+H", hotkeyRegistered: true, ip: "0.0.0.0", budget: 150_000, hardCeiling: 180_000, checkAppUpdates: true };
   let skipped = "";
   const appUpdate = (): import("../shared/api").AppUpdate => ({ enabled: settings.checkAppUpdates, current: "0.1.0", latest: "0.1.1", url: "https://github.com/evosys21/nullhost/releases/tag/v0.1.1", newer: true, available: settings.checkAppUpdates && skipped !== "0.1.1", checkedAt: at, canInstall: true });
   const status = (): Status => ({
@@ -41,7 +41,6 @@ export function createMockApi(): NullhostApi {
     config: { enabled: sources.filter((s) => s.enabled).map((s) => s.id), userSources: 0, allowlist: allow.length, budget: settings.budget },
     lastUpdate: { at, hosts: 74_550, sources: Object.fromEntries(sources.filter((s) => s.lastRun).map((s) => [s.id, s.lastRun!])) },
     lastApply: { at, hosts: 74_550, lines: 8_288, mode: "enabled" },
-    reload: { last: { at, ms: 2_870, hosts: 9_960, probe: "ads.example.com" }, slow: false, perHostMs: 0.29, suggestedBudget: 10_000, basis: 3 },
     snapshots: 7,
     hasOriginal: true,
   });
@@ -121,7 +120,6 @@ export function createMockApi(): NullhostApi {
       { id: "hosts-read", level: "ok", label: "Hosts file readable", detail: "C:\Windows\System32\drivers\etc\hosts" },
       { id: "elevated", level: "ok", label: "Running as administrator", detail: "NullHost can change the hosts file" },
       { id: "region", level: "ok", label: "NullHost region", detail: "74,550 hosts in 8,288 lines" },
-      { id: "reload", level: "ok", label: "DNS Client reload after a write", detail: "last write: 2.9 s for 9,960 hosts; about 2.9 s per 10,000 hosts on this PC, so a budget of 10,000 keeps a reload near 3.0 s" },
       { id: "dnscache", level: "ok", label: "DNS Client service", detail: "running" },
       { id: "defender", level: "warn", label: "Defender exclusion for the hosts file", detail: "not set: Defender may revert the file", fix: "Windows Security > Virus & threat protection > Exclusions > Add the hosts file" },
       { id: "resolve", level: "ok", label: "Resolver uses the file", detail: "a-ads.com -> 0.0.0.0" },
