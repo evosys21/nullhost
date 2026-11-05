@@ -12,7 +12,7 @@ export interface Platform {
   readonly eol: "\r\n" | "\n";
   /** hosts per line in the managed region; Windows: 9 (measured in M0), Linux: 1 */
   readonly perLine: number;
-  /** refuse selections larger than this (M0: 180k compressed reloads in ~8 s on Windows) */
+  /** refuse selections larger than this (Windows 26H2: ~0.3 ms per host per reload, so 20k is ~6 s) */
   readonly hardCeiling: number;
   systemHostsPath(): string;
   isElevated(): Promise<boolean>;
@@ -21,6 +21,13 @@ export interface Platform {
   /** Write byte for byte, in place, retrying while locked, then verify by reading back. */
   writeHosts(path: string, content: string): Promise<WriteReport>;
   flushDns(): Promise<void>;
+  /**
+   * The system resolver's IPv4 answer for `host` (rejects when there is none).
+   * Present where the resolver reloads the hosts file after a write (Windows'
+   * DNS Client); the engine then times that reload. Linux re-reads /etc/hosts
+   * on each lookup, so it has nothing to time.
+   */
+  resolve?(host: string): Promise<string>;
   /** read-only checks for the Troubleshoot panel; null = could not tell */
   diagnostics?: {
     dnsClientRunning(): Promise<boolean | null>;

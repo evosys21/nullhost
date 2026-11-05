@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { lookup } from "node:dns/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import type { Platform } from "./types.ts";
@@ -96,7 +97,8 @@ export function windowsPlatform(env: NodeJS.ProcessEnv = process.env): Platform 
     name: "windows",
     eol: "\r\n",
     perLine: 9,
-    hardCeiling: 180_000,
+    // 26H2: ~6 s per reload. 78k (25 s) hung the DNS Client at boot on 2026-11-05.
+    hardCeiling: 20_000,
     systemHostsPath: () => join(env.SystemRoot ?? "C:\\Windows", "System32", "drivers", "etc", "hosts"),
     // `fltmc` succeeds only in an elevated process; `net session` is the fallback if fltmc is missing
     isElevated: async () => (await exitCode("fltmc", [])) === 0 || (await exitCode("net", ["session"])) === 0,
@@ -106,6 +108,8 @@ export function windowsPlatform(env: NodeJS.ProcessEnv = process.env): Platform 
       const c = await exitCode("ipconfig", ["/flushdns"], 15_000);
       if (c !== 0) throw new Error(`ipconfig /flushdns failed (exit ${c})`);
     },
+    // getaddrinfo goes through the DNS Client, which answers from its hosts-file table
+    resolve: async (host) => (await lookup(host, { family: 4 })).address,
     diagnostics: {
       dnsClientRunning: async () => {
         try {
