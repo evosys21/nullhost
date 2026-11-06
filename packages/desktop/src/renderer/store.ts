@@ -19,7 +19,7 @@ export const store = reactive({
   appUpdate: null as AppUpdate | null,
   /** what is running right now, shown bottom right */
   busy: "",
-  /** the step of `busy` running right now, from the main process ("Downloading AdAway (2 of 3)") */
+  /** the step of `busy` running right now, from the main process ("Downloading Pete Lowe (1 of 2)") */
   step: "",
   error: "",
   /** success messages, shown as toasts bottom right (oldest first); each goes away by itself */

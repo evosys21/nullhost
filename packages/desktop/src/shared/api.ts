@@ -203,7 +203,7 @@ export interface NullhostApi {
   elevate(): Promise<void>;
   /** called after anything changed (any window, the tray, the hotkey, the pause timer) */
   onChanged(cb: () => void): () => void;
-  /** each step of a running operation, in words ("Downloading AdAway (2 of 3)") */
+  /** each step of a running operation, in words ("Downloading Pete Lowe (1 of 2)") */
   onProgress(cb: (step: string) => void): () => void;
 }
 

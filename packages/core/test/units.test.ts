@@ -178,3 +178,10 @@ test("parseConfig: the block address can only be 0.0.0.0 or 127.0.0.1, whoever e
   // TOML escapes, so the parsed value really holds a line break
   assert.throws(() => parseConfig(String.raw`ip = "1.2.3.4 mybank.com\r\n0.0.0.0"`), /block address, must be/);
 });
+
+test("parseConfig: a retired catalog list is swapped for its replacement, once", () => {
+  assert.deepEqual(parseConfig('enabled = ["adaway", "petelowe"]').enabled, ["sb-own", "petelowe"]);
+  assert.deepEqual(parseConfig('enabled = ["sb-own", "adaway"]').enabled, ["sb-own"]);
+  assert.deepEqual(parseConfig('enabled = ["user-x"]').enabled, ["user-x"]);
+  assert.deepEqual(parseConfig("").enabled, ["petelowe", "sb-own"]);
+});

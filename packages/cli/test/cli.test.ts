@@ -55,7 +55,7 @@ test("read-only commands work unelevated on the system file", async () => {
 
 test("end to end on a temp hosts file: add source, apply, check, disable, enable, restore", async () => {
   const t = await setup();
-  assert.equal(await t.nh("source", "disable", "stevenblack", "adaway", "petelowe"), 0);
+  assert.equal(await t.nh("source", "disable", "sb-own", "petelowe"), 0);
   assert.equal(await t.nh("source", "add", t.list, "--name", "Test list"), 0);
   assert.equal(await t.nh("apply"), 0, t.errs.join("\n"));
   let text = await readFile(t.hostsFile, "latin1");
@@ -103,7 +103,7 @@ test("doctor, export, catalog and schedule commands", async () => {
   });
   const io = { ...t.io, scheduler: fakeScheduler };
   const nh = (...args: string[]) => run([...args, "--hosts-file", t.hostsFile, "--data-dir", join(t.dir, "data")], io);
-  assert.equal(await nh("source", "disable", "stevenblack", "adaway", "petelowe"), 0);
+  assert.equal(await nh("source", "disable", "sb-own", "petelowe"), 0);
   assert.equal(await nh("source", "add", t.list, "--name", "Test list"), 0);
   assert.equal(await nh("apply"), 0);
 
@@ -154,7 +154,7 @@ test("parsePause", () => {
 
 test("previews never write: no resume of an expired pause, no elevation needed (findings 4 and 7)", async () => {
   const t = await setup();
-  assert.equal(await t.nh("source", "disable", "stevenblack", "adaway", "petelowe"), 0);
+  assert.equal(await t.nh("source", "disable", "sb-own", "petelowe"), 0);
   assert.equal(await t.nh("source", "add", t.list, "--name", "Test list"), 0);
   assert.equal(await t.nh("apply"), 0);
   assert.equal(await t.nh("pause", "1m"), 0);
@@ -188,10 +188,10 @@ test("--json covers allowlist and source changes (finding 8)", async () => {
   assert.deepEqual((await js("allow", "add", "ads.example.com")).allowlist, ["ads.example.com"]);
   assert.equal((await js("allow", "remove", "ads.example.com")).removed, "ads.example.com");
   assert.equal((await js("allow", "remove", "nope.example.com")).removed, null);
-  const off = await js("source", "disable", "adaway");
-  assert.deepEqual([off.action, off.ids, off.enabled.includes("adaway")], ["disable", ["adaway"], false]);
-  const on = await js("source", "enable", "adaway");
-  assert.deepEqual([on.action, on.ids, on.enabled.includes("adaway")], ["enable", ["adaway"], true]);
+  const off = await js("source", "disable", "sb-own");
+  assert.deepEqual([off.action, off.ids, off.enabled.includes("sb-own")], ["disable", ["sb-own"], false]);
+  const on = await js("source", "enable", "sb-own");
+  assert.deepEqual([on.action, on.ids, on.enabled.includes("sb-own")], ["enable", ["sb-own"], true]);
   const added = (await js("source", "add", t.list, "--name", "Test list")).added;
   assert.equal(added.name, "Test list");
   assert.equal((await js("source", "remove", added.id)).removed, added.id);

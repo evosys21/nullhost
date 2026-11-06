@@ -40,7 +40,7 @@ export interface EngineOptions {
   snapshotsToKeep?: number;
   /** flush the resolver cache after writes; default: only when writing the system hosts file */
   flush?: boolean;
-  /** each step of a long operation, in words ("Downloading AdAway (2 of 3)"); the desktop shows it */
+  /** each step of a long operation, in words ("Downloading Pete Lowe (1 of 2)"); the desktop shows it */
   onProgress?: (step: string) => void;
 }
 

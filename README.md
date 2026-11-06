@@ -13,8 +13,9 @@ the window, the tray or a hotkey.
 
 ## Features
 
-- **Curated list catalog** with three tiers: recommended (StevenBlack unified,
-  AdAway, Pete Lowe), stricter (KADhosts, Phishing Army, HaGeZi Multi) and
+- **Curated list catalog** with three tiers: recommended (Pete Lowe,
+  StevenBlack's own additions), stricter (StevenBlack unified, Dan Pollock,
+  KADhosts, Phishing Army, HaGeZi Multi) and
   optional topic lists (gambling, fake news, social, adult, crypto-mining,
   Windows & Office telemetry). Add your own lists by URL or file, in hosts,
   domains, Adblock or dnsmasq format.
@@ -50,7 +51,7 @@ server: it uses the hosts file, which Windows already reads for every lookup.
 | **NullHost** | Windows | Hosts file | Manages one region and leaves the rest of the file alone |
 | HostsMan | Windows | Hosts file | No longer maintained. NullHost can clean up its leftovers |
 | Hosts File Editor | Windows | Hosts file | An editor; no list downloads or updates |
-| AdAway | Android (root) | Hosts file | NullHost ships AdAway's list in its catalog |
+| AdAway | Android (root) | Hosts file | Its hosts list has not changed since 2023, so NullHost no longer ships it |
 | personalDNSfilter | Android, Java desktop | Local DNS proxy | Runs in the background as your resolver |
 | Pi-hole, AdGuard Home | Network | DNS server | Blocks for the whole network; needs a machine to run on |
 
