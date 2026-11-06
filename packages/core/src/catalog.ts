@@ -6,6 +6,16 @@ export interface Catalog {
   sources: Source[];
   /** ids dropped from the catalog, with why: a saved config stops using them; nothing replaces them on its own */
   retired?: Record<string, string>;
+  /**
+   * The recommended sets earlier releases shipped. A saved `enabled` whose catalog ids are
+   * exactly one of them was never chosen by the user, only saved along with another setting,
+   * so it moves to today's recommended set (config.ts).
+   *
+   * This runs on every load, not once. A set is only safe here if nobody can pick it again on
+   * purpose: the one listed includes `adaway`, which is retired and cannot be turned back on.
+   * A former default made only of live sources would also catch a user who chose it, every time.
+   */
+  formerDefaults?: string[][];
 }
 
 const FORMATS: SourceFormat[] = ["hosts", "domains", "adblock", "dnsmasq"];
@@ -22,7 +32,8 @@ function str(v: unknown, what: string, max: number, required = true): string | u
 /**
  * Validate a catalog strictly: it decides which URLs NullHost downloads, so only
  * well-formed https sources with known formats and tiers are accepted, and
- * nothing in it can enable a source by itself.
+ * nothing in it can enable a source by itself. `formerDefaults` comes closest: it moves a
+ * saved set that is exactly an old default to the current one, as if nothing had been saved.
  */
 export function validateCatalog(raw: unknown): Catalog {
   if (!raw || typeof raw !== "object") throw new Error("catalog: not a JSON object");
@@ -74,7 +85,20 @@ export function validateCatalog(raw: unknown): Catalog {
       retired[id] = str(why, `retired.${id}`, 200)!;
     }
   }
-  return { version, sources, ...(retired ? { retired } : {}) };
+  let formerDefaults: string[][] | undefined;
+  if (o.formerDefaults !== undefined) {
+    if (!Array.isArray(o.formerDefaults) || o.formerDefaults.length > 50) throw new Error("catalog: formerDefaults must be a list of at most 50 id lists");
+    formerDefaults = o.formerDefaults.map((set: unknown, i: number) => {
+      if (!Array.isArray(set) || set.length === 0 || set.length > 500) throw new Error(`catalog: formerDefaults[${i}] must be a list of 1-500 ids`);
+      const ids = set.map((id: unknown) => str(id, `formerDefaults[${i}] id`, 40)!);
+      for (const id of ids) {
+        if (!seen.has(id) && !(retired && Object.hasOwn(retired, id))) throw new Error(`catalog: formerDefaults[${i}] names ${id}, which is neither a source nor retired`);
+      }
+      if (new Set(ids).size !== ids.length) throw new Error(`catalog: formerDefaults[${i}] repeats an id`);
+      return ids;
+    });
+  }
+  return { version, sources, ...(retired ? { retired } : {}), ...(formerDefaults ? { formerDefaults } : {}) };
 }
 
 /**

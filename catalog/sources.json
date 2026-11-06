@@ -1,6 +1,6 @@
 {
   "version": "2026-11-06",
-  "notes": "Seed catalog. 'verified' = fetched and parsed successfully on that date. Tiers: recommended = on after install; stricter and optional = off. Recommended is kept small (Pete Lowe + StevenBlack's own list: 6,446 unique on 2026-11-06) because Windows 11 26H2 reloads the hosts file at about 0.3 ms per host. 'retired' lists ids that were dropped: a saved config stops using them, and nothing replaces them on its own. HaGeZi Multi is listed so the ceiling can refuse it visibly.",
+  "notes": "Seed catalog. 'verified' = fetched and parsed successfully on that date. Tiers: recommended = on after install; stricter and optional = off. Recommended is kept small (Pete Lowe + StevenBlack's own list: 6,446 unique on 2026-11-06) because Windows 11 26H2 reloads the hosts file at about 0.3 ms per host. 'retired' lists ids that were dropped: a saved config stops using them, and nothing replaces them on its own. 'formerDefaults' lists the recommended sets earlier releases shipped (0.1.0-0.1.5): a saved config whose lists are exactly one of them moves to today's recommended set. HaGeZi Multi is listed so the ceiling can refuse it visibly.",
   "sources": [
     {
       "id": "petelowe",
@@ -131,5 +131,8 @@
   ],
   "retired": {
     "adaway": "AdAway official: its hosts file has not changed since 2023-04-29 (dropped 2026-11-06)."
-  }
+  },
+  "formerDefaults": [
+    ["stevenblack", "adaway", "petelowe"]
+  ]
 }

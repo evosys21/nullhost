@@ -20,6 +20,20 @@ function dropRetired(ids: string[], catalog: Catalog): string[] {
   return ids.filter((id) => !Object.hasOwn(retired, id));
 }
 
+/**
+ * A saved `enabled` as it is used now. Every save writes `enabled`, so a config saved for an
+ * allowlist entry or a pause also pins the lists that were the default then. When its catalog
+ * ids are exactly an earlier default, the user never chose them: they become today's
+ * recommended set, and the user's own sources stay on. Anything else is the user's choice and
+ * only loses retired ids.
+ */
+function savedEnabled(ids: string[], catalog: Catalog): string[] {
+  const own = ids.filter((id) => id.startsWith("user-"));
+  const listed = new Set(ids.filter((id) => !id.startsWith("user-")));
+  const former = (catalog.formerDefaults ?? []).some((set) => set.length === listed.size && set.every((id) => listed.has(id)));
+  return former ? [...recommendedIds(catalog), ...own] : dropRetired(ids, catalog);
+}
+
 function str(v: unknown, field: string): string {
   if (typeof v !== "string") throw new Error(`config: ${field} must be a string`);
   return v;
@@ -71,7 +85,7 @@ export function parseConfig(text: string, catalog: Catalog = BUILTIN_CATALOG): C
   return {
     ip,
     budget,
-    enabled: raw.enabled === undefined ? d.enabled : dropRetired(strList(raw.enabled, "enabled"), catalog),
+    enabled: raw.enabled === undefined ? d.enabled : savedEnabled(strList(raw.enabled, "enabled"), catalog),
     userSources,
     allowlist: strList(raw.allowlist, "allowlist"),
   };
