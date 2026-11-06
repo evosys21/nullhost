@@ -201,3 +201,34 @@ test("validateCatalog: retired ids are well-formed and never also a source", () 
   assert.throws(() => validateCatalog({ ...base, retired: ["b"] }), /retired must be/);
   assert.ok(BUILTIN_CATALOG.retired?.adaway, "AdAway stays retired so old configs drop it");
 });
+
+test("parseConfig: a saved set that is exactly a former default moves to today's recommended set", () => {
+  const cat = validateCatalog({
+    version: "2026-11-06",
+    sources: [
+      { id: "a", name: "List A", url: "https://lists.example.test/a", format: "hosts", licence: "MIT", tier: "recommended" },
+      { id: "big", name: "Big list", url: "https://lists.example.test/big", format: "hosts", licence: "MIT", tier: "stricter" },
+    ],
+    retired: { old: "gone since 2023" },
+    formerDefaults: [["big", "old"]],
+  });
+  // saved with an allowlist entry or a pause under the old defaults: never chosen, so moved
+  assert.deepEqual(parseConfig('enabled = ["old", "big"]', cat).enabled, ["a"]);
+  assert.deepEqual(parseConfig('enabled = ["big", "user-mine", "old"]', cat).enabled, ["a", "user-mine"]);
+  // anything else was a choice, and only loses the retired id
+  assert.deepEqual(parseConfig('enabled = ["big"]', cat).enabled, ["big"], "the old default minus a list the user turned off");
+  assert.deepEqual(parseConfig('enabled = ["old", "big", "a"]', cat).enabled, ["big", "a"], "the old default plus a list the user turned on");
+  assert.deepEqual(parseConfig("enabled = []", cat).enabled, []);
+});
+
+test("validateCatalog: formerDefaults name sources or retired ids, each once", () => {
+  const base = { version: "2026-11-06", sources: [{ id: "a", name: "List A", url: "https://lists.example.test/a", format: "hosts", licence: "MIT", tier: "optional" }], retired: { b: "why" } };
+  assert.deepEqual(validateCatalog({ ...base, formerDefaults: [["a", "b"]] }).formerDefaults, [["a", "b"]]);
+  assert.throws(() => validateCatalog({ ...base, formerDefaults: [["a", "c"]] }), /neither a source nor retired/);
+  assert.throws(() => validateCatalog({ ...base, formerDefaults: [["a", "a"]] }), /repeats an id/);
+  assert.throws(() => validateCatalog({ ...base, formerDefaults: [[]] }), /1-500 ids/);
+  assert.throws(() => validateCatalog({ ...base, formerDefaults: ["a"] }), /1-500 ids/);
+  assert.throws(() => validateCatalog({ ...base, formerDefaults: { a: 1 } }), /formerDefaults must be/);
+  // what every release up to 0.1.5 saved
+  assert.deepEqual(parseConfig('enabled = ["stevenblack", "adaway", "petelowe"]').enabled, ["petelowe", "sb-own"]);
+});
