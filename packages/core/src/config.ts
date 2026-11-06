@@ -14,6 +14,12 @@ export function defaultConfig(catalog: Catalog = BUILTIN_CATALOG): Config {
 
 const FORMATS: SourceFormat[] = ["hosts", "domains", "adblock", "dnsmasq"];
 
+/** Drop the ids the catalog retired. Nothing takes their place: the catalog never enables a source by itself. */
+function dropRetired(ids: string[], catalog: Catalog): string[] {
+  const retired = catalog.retired ?? {};
+  return ids.filter((id) => !Object.hasOwn(retired, id));
+}
+
 function str(v: unknown, field: string): string {
   if (typeof v !== "string") throw new Error(`config: ${field} must be a string`);
   return v;
@@ -65,7 +71,7 @@ export function parseConfig(text: string, catalog: Catalog = BUILTIN_CATALOG): C
   return {
     ip,
     budget,
-    enabled: raw.enabled === undefined ? d.enabled : strList(raw.enabled, "enabled"),
+    enabled: raw.enabled === undefined ? d.enabled : dropRetired(strList(raw.enabled, "enabled"), catalog),
     userSources,
     allowlist: strList(raw.allowlist, "allowlist"),
   };

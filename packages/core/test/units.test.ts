@@ -22,6 +22,8 @@ import {
   removeRegion,
   renderRegion,
   sorted,
+  validateCatalog,
+  BUILTIN_CATALOG,
 } from "../src/index.ts";
 
 const opts = { ip: "0.0.0.0", perLine: 9, eol: "\r\n" as const, generated: new Date(0), sources: [{ name: "Test list", licence: "MIT" }] };
@@ -177,4 +179,25 @@ test("parseConfig: the block address can only be 0.0.0.0 or 127.0.0.1, whoever e
   assert.throws(() => parseConfig('ip = "6.6.6.6"'), /block address, must be/);
   // TOML escapes, so the parsed value really holds a line break
   assert.throws(() => parseConfig(String.raw`ip = "1.2.3.4 mybank.com\r\n0.0.0.0"`), /block address, must be/);
+});
+
+test("parseConfig: an id the catalog retired is dropped, and nothing is enabled in its place", () => {
+  const cat = validateCatalog({
+    version: "2026-11-06",
+    sources: [{ id: "a", name: "List A", url: "https://lists.example.test/a", format: "hosts", licence: "MIT", tier: "recommended" }],
+    retired: { old: "gone since 2023" },
+  });
+  assert.deepEqual(parseConfig('enabled = ["old", "a", "user-x"]', cat).enabled, ["a", "user-x"]);
+  assert.deepEqual(parseConfig('enabled = ["old"]', cat).enabled, []);
+  assert.deepEqual(parseConfig('enabled = ["missing"]', cat).enabled, ["missing"], "an unknown id that was never retired still warns at build time");
+});
+
+test("validateCatalog: retired ids are well-formed and never also a source", () => {
+  const base = { version: "2026-11-06", sources: [{ id: "a", name: "List A", url: "https://lists.example.test/a", format: "hosts", licence: "MIT", tier: "optional" }] };
+  assert.deepEqual(validateCatalog({ ...base, retired: { b: "why" } }).retired, { b: "why" });
+  assert.throws(() => validateCatalog({ ...base, retired: { a: "why" } }), /both a source and retired/);
+  assert.throws(() => validateCatalog({ ...base, retired: { "user-x": "why" } }), /valid catalog id/);
+  assert.throws(() => validateCatalog({ ...base, retired: { b: "" } }), /retired\.b/);
+  assert.throws(() => validateCatalog({ ...base, retired: ["b"] }), /retired must be/);
+  assert.ok(BUILTIN_CATALOG.retired?.adaway, "AdAway stays retired so old configs drop it");
 });

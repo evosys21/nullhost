@@ -4,6 +4,8 @@ import type { Source, SourceFormat, Tier } from "./types.ts";
 export interface Catalog {
   version: string;
   sources: Source[];
+  /** ids dropped from the catalog, with why: a saved config stops using them; nothing replaces them on its own */
+  retired?: Record<string, string>;
 }
 
 const FORMATS: SourceFormat[] = ["hosts", "domains", "adblock", "dnsmasq"];
@@ -60,7 +62,19 @@ export function validateCatalog(raw: unknown): Catalog {
       warning: str(e.warning, `sources[${i}].warning`, 300, false),
     };
   });
-  return { version, sources };
+  let retired: Record<string, string> | undefined;
+  if (o.retired !== undefined) {
+    if (!o.retired || typeof o.retired !== "object" || Array.isArray(o.retired)) throw new Error("catalog: retired must be an object of id: reason");
+    const entries = Object.entries(o.retired as Record<string, unknown>);
+    if (entries.length > 500) throw new Error("catalog: retired holds more than 500 ids");
+    retired = {};
+    for (const [id, why] of entries) {
+      if (!ID.test(id) || id.startsWith("user-")) throw new Error(`catalog: retired id "${id}" is not a valid catalog id`);
+      if (seen.has(id)) throw new Error(`catalog: ${id} is both a source and retired`);
+      retired[id] = str(why, `retired.${id}`, 200)!;
+    }
+  }
+  return { version, sources, ...(retired ? { retired } : {}) };
 }
 
 /**

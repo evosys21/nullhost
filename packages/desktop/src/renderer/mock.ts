@@ -12,9 +12,11 @@ export function createMockApi(): NullhostApi {
   const at = new Date(Date.now() - 2 * 3600_000).toISOString();
   const run = (kept: number, added?: number, removed?: number) => ({ from: "network" as const, at, bytes: 0, parsed: kept, kept, unique: kept, added, removed });
   let sources: SourceView[] = [
-    { id: "stevenblack", name: "StevenBlack unified", url: "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts", format: "hosts", licence: "MIT", tier: "recommended", category: "ads + malware", enabled: true, lastRun: run(74_480, 298, 37) },
-    { id: "adaway", name: "AdAway official", url: "https://adaway.org/hosts.txt", format: "hosts", licence: "CC BY 3.0", tier: "recommended", category: "mobile ads", enabled: true, lastRun: run(6_540, 14, 4) },
     { id: "petelowe", name: "Pete Lowe (pgl.yoyo.org)", url: "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts", format: "hosts", licence: "MCRAE", tier: "recommended", category: "ads", enabled: true, lastRun: run(3_563, 0, 0) },
+    { id: "sb-own", name: "StevenBlack: own additions", url: "https://raw.githubusercontent.com/StevenBlack/hosts/master/data/StevenBlack/hosts", format: "hosts", licence: "MIT", tier: "recommended", category: "ads + tracking", enabled: false },
+    // turned on by this user; with it on, StevenBlack's own additions add nothing
+    { id: "stevenblack", name: "StevenBlack unified", url: "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts", format: "hosts", licence: "MIT", tier: "stricter", category: "ads + malware", warning: "About 78k hosts: on Windows 11 26H2 each reload of the hosts file stalls DNS for about 23 s.", enabled: true, lastRun: run(74_480, 298, 37) },
+    { id: "pollock", name: "Dan Pollock (someonewhocares.org)", url: "https://someonewhocares.org/hosts/zero/hosts", format: "hosts", licence: "Non-commercial use only", tier: "stricter", category: "ads + tracking + malware", warning: "About 13k hosts: on Windows 11 26H2 each reload of the hosts file stalls DNS for about 4 s.", enabled: false },
     { id: "kadhosts", name: "KADhosts", url: "https://raw.githubusercontent.com/PolishFiltersTeam/KADhosts/master/KADhosts.txt", format: "hosts", licence: "CC BY-SA 4.0", tier: "stricter", category: "scam + fraud", enabled: false },
     { id: "hagezi-multi", name: "HaGeZi Multi Normal", url: "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists-legacy@latest/hosts/multi.txt", format: "hosts", licence: "GPL-3.0", tier: "stricter", category: "ads + tracking + scam", warning: "About 365k hosts in hosts format: over the Windows hard ceiling on its own.", enabled: false },
     { id: "sb-gambling", name: "StevenBlack: gambling only", url: "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/gambling-only/hosts", format: "hosts", licence: "MIT", tier: "optional", category: "gambling", enabled: false },
@@ -24,7 +26,7 @@ export function createMockApi(): NullhostApi {
   let hostsText =
     "# Copyright (c) 1993-2009 Microsoft Corp.\r\n#\r\n# localhost name resolution is handled within DNS itself.\r\n\r\n127.0.0.1   alma.local\r\n127.0.0.1   trader.local\r\n192.168.1.10 nas.home\r\n\r\n" +
     "# Added by Docker Desktop\r\n192.168.65.254 host.docker.internal\r\n# End of section\r\n\r\n" +
-    "# >>> nullhost managed (generated=2026-10-26T07:30:12.000Z, hosts=74550, perLine=9, status=enabled) >>>\r\n# Sources: StevenBlack unified (MIT), AdAway official (CC BY 3.0), Pete Lowe (pgl.yoyo.org) (MCRAE)\r\n# Do not edit between the markers; NullHost rewrites this region. Your own entries outside it are preserved.\r\n" +
+    "# >>> nullhost managed (generated=2026-10-26T07:30:12.000Z, hosts=74550, perLine=9, status=enabled) >>>\r\n# Sources: Pete Lowe (pgl.yoyo.org) (MCRAE), StevenBlack unified (MIT)\r\n# Do not edit between the markers; NullHost rewrites this region. Your own entries outside it are preserved.\r\n" +
     "0.0.0.0 a-ads.com a.adroll.com a.mobtrks.com a.opttimal.com a.sakh.com a.yieldmo.com a2.adform.net a22.adform.net ad.360yield.com\r\n0.0.0.0 ad.doubleclick.net ad.adview.cn ad.afy11.net ad.agkn.com ad.amgdgt.com ad.atdmt.com ad.duga.jp ad.foxnetworks.com ad.gt\r\n" +
     "# <<< nullhost managed <<<\r\n";
   let schedule: import("../shared/api").ScheduleStatus = { installed: true, available: true, at: "07:30", lastRun: new Date(Date.now() - 6 * 3600_000).toISOString(), lastResult: 0, nextRun: new Date(Date.now() + 18 * 3600_000).toISOString() };
@@ -51,9 +53,9 @@ export function createMockApi(): NullhostApi {
   let record = 0;
   const LOOKUPS: Array<[string, string, DnsLogEntry["verdict"], string[]?, string?]> = [
     ["www.google.com", "chrome.exe", "resolved"],
-    ["ad.doubleclick.net", "chrome.exe", "blocked", ["StevenBlack unified", "AdAway official"]],
+    ["ad.doubleclick.net", "chrome.exe", "blocked", ["StevenBlack unified"]],
     ["a.adroll.com", "chrome.exe", "blocked", ["StevenBlack unified"]],
-    ["cdn.segment.com", "Code.exe", "allowed", ["StevenBlack unified"], "cdn.segment.com"],
+    ["cdn.segment.com", "Code.exe", "allowed", ["Pete Lowe (pgl.yoyo.org)", "StevenBlack unified"], "cdn.segment.com"],
     ["github.com", "Code.exe", "resolved"],
     ["alma.local", "firefox.exe", "own"],
     ["settings-win.data.microsoft.com", "svchost.exe", "resolved"],
@@ -89,12 +91,12 @@ export function createMockApi(): NullhostApi {
     check: async (host) => {
       const h = host.trim().toLowerCase();
       const allowed = allow.find((p) => p === h || (p.startsWith("*.") && h.endsWith(p.slice(1))));
-      const listed = /ad|track|doubleclick|segment/.test(h) ? ["StevenBlack unified", "AdAway official"] : [];
+      const listed = /ad|track|doubleclick|segment/.test(h) ? ["StevenBlack unified"] : [];
       return { host: h, listedBy: listed, allowedBy: listed.length ? allowed : undefined, wouldBlock: listed.length > 0 && !allowed, blockedNow: listed.length > 0 && !allowed && mode === "enabled", ownEntry: false };
     },
     update: async () => {
       // the real engine's steps, so the busy toast can be reviewed in the browser
-      for (const step of ["Downloading StevenBlack unified (1 of 3)", "Downloading AdAway official (2 of 3)", "Downloading Pete Lowe (pgl.yoyo.org) (3 of 3)", "Merging 3 lists", "Writing the hosts file", "Flushing the DNS cache"]) {
+      for (const step of ["Downloading Pete Lowe (pgl.yoyo.org) (1 of 2)", "Downloading StevenBlack unified (2 of 2)", "Merging 2 lists", "Writing the hosts file", "Flushing the DNS cache"]) {
         for (const cb of progress) cb(step);
         await new Promise((r) => setTimeout(r, 700));
       }

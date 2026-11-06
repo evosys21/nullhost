@@ -53,7 +53,7 @@ test("classify: region, own entry, allowlist, elsewhere, resolved, failed", () =
   const idx: BlockIndex = {
     region: new Set(["ads.example.com"]),
     own: new Set(["mine.example"]),
-    owners: new Map([["ads.example.com", ["StevenBlack unified", "AdAway official"]]]),
+    owners: new Map([["ads.example.com", ["StevenBlack unified", "Pete Lowe (pgl.yoyo.org)"]]]),
     allowlisted: new Map([["cdn.segment.com", ["StevenBlack unified"]]]),
     rules: compileAllowlist(["cdn.segment.com"]).rules,
   };
@@ -61,7 +61,7 @@ test("classify: region, own entry, allowlist, elsewhere, resolved, failed", () =
 
   const blocked = classify(e("ads.example.com", 28, 9501, []), idx, "chrome.exe");
   assert.equal(blocked.verdict, "blocked"); // an AAAA "no records" for a blocked name is still blocked
-  assert.deepEqual(blocked.listedBy, ["StevenBlack unified", "AdAway official"]);
+  assert.deepEqual(blocked.listedBy, ["StevenBlack unified", "Pete Lowe (pgl.yoyo.org)"]);
   assert.equal(blocked.typeName, "AAAA");
   assert.equal(blocked.statusText, "no records of this type");
   assert.equal(blocked.process, "chrome.exe");
