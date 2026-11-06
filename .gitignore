@@ -10,3 +10,13 @@ out/
 
 # local copy of the hosts file + data for trying the app (holds private host names)
 .dev/
+
+# agent tooling and design notes: a separate private checkout in this same folder
+/.private.git/
+/AGENTS.md
+/.agents/
+/.claude/
+/FINDINGS.md
+/PROPOSAL.md
+/design/
+/spike/
