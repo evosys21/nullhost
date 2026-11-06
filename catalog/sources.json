@@ -1,6 +1,6 @@
 {
   "version": "2026-11-06",
-  "notes": "Seed catalog. 'verified' = fetched and parsed successfully on that date. Tiers: recommended = on after install; stricter and optional = off. Recommended stays under 10k hosts (Pete Lowe + StevenBlack's own list: 6,444 unique on 2026-11-06): Windows 11 26H2 reloads the hosts file at about 0.3 ms per host. AdAway was dropped on 2026-11-06: its hosts file has not changed since 2023-04-29. HaGeZi Multi is listed so the ceiling can refuse it visibly.",
+  "notes": "Seed catalog. 'verified' = fetched and parsed successfully on that date. Tiers: recommended = on after install; stricter and optional = off. Recommended is kept small (Pete Lowe + StevenBlack's own list: 6,446 unique on 2026-11-06) because Windows 11 26H2 reloads the hosts file at about 0.3 ms per host. 'retired' lists ids that were dropped: a saved config stops using them, and nothing replaces them on its own. HaGeZi Multi is listed so the ceiling can refuse it visibly.",
   "sources": [
     {
       "id": "petelowe",
@@ -31,7 +31,7 @@
       "tier": "stricter",
       "category": "ads + malware",
       "verified": "2026-10-26",
-      "warning": "About 78k hosts: about 23 s of DNS stall per reload on Windows 11 26H2."
+      "warning": "About 78k hosts: on Windows 11 26H2 each reload of the hosts file stalls DNS for about 23 s."
     },
     {
       "id": "pollock",
@@ -42,7 +42,7 @@
       "tier": "stricter",
       "category": "ads + tracking + malware",
       "verified": "2026-11-06",
-      "warning": "About 13k hosts: with the recommended lists about 19k, over a 10k budget (about 6 s per reload on Windows 11 26H2)."
+      "warning": "About 13k hosts: on Windows 11 26H2 each reload of the hosts file stalls DNS for about 4 s."
     },
     {
       "id": "kadhosts",
@@ -128,5 +128,8 @@
       "category": "telemetry",
       "warning": "Can break Microsoft services and trips Defender's HostsFileHijack detection."
     }
-  ]
+  ],
+  "retired": {
+    "adaway": "AdAway official: its hosts file has not changed since 2023-04-29 (dropped 2026-11-06)."
+  }
 }

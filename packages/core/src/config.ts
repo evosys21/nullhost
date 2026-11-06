@@ -14,16 +14,10 @@ export function defaultConfig(catalog: Catalog = BUILTIN_CATALOG): Config {
 
 const FORMATS: SourceFormat[] = ["hosts", "domains", "adblock", "dnsmasq"];
 
-/** Catalog ids that were dropped, and what replaces them in a saved `enabled` list. */
-export const RETIRED_SOURCES: Record<string, string> = {
-  // AdAway's hosts file has not changed since 2023-04-29 (dropped 2026-11-06)
-  adaway: "sb-own",
-};
-
-function migrateEnabled(ids: string[], catalog: Catalog): string[] {
-  const known = new Set(catalog.sources.map((s) => s.id));
-  const out = ids.map((id) => (!known.has(id) && RETIRED_SOURCES[id] && known.has(RETIRED_SOURCES[id]) ? RETIRED_SOURCES[id] : id));
-  return [...new Set(out)];
+/** Drop the ids the catalog retired. Nothing takes their place: the catalog never enables a source by itself. */
+function dropRetired(ids: string[], catalog: Catalog): string[] {
+  const retired = catalog.retired ?? {};
+  return ids.filter((id) => !Object.hasOwn(retired, id));
 }
 
 function str(v: unknown, field: string): string {
@@ -77,7 +71,7 @@ export function parseConfig(text: string, catalog: Catalog = BUILTIN_CATALOG): C
   return {
     ip,
     budget,
-    enabled: raw.enabled === undefined ? d.enabled : migrateEnabled(strList(raw.enabled, "enabled"), catalog),
+    enabled: raw.enabled === undefined ? d.enabled : dropRetired(strList(raw.enabled, "enabled"), catalog),
     userSources,
     allowlist: strList(raw.allowlist, "allowlist"),
   };
