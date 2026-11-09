@@ -8,6 +8,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import Banners from "../components/Banners.vue";
 import Icon from "../components/Icon.vue";
 import { act, api, cleanError, store } from "../store";
+import { holdWhileDirty } from "../unsaved";
 
 const START = "# >>> nullhost managed";
 const END = "# <<< nullhost managed <<<";
@@ -91,6 +92,7 @@ const protectRegion = EditorState.changeFilter.of((tr) => {
 
 const host = ref<HTMLDivElement | null>(null);
 const dirty = ref(false);
+holdWhileDirty("editor", dirty);
 const loaded = ref("");
 const lineCount = ref(0);
 const canWrite = computed(() => store.info?.canWrite ?? false);
