@@ -25,6 +25,13 @@ export interface AppInfo {
   dev: boolean;
   /** the portable copy (zip): no daily task, no start at login */
   portable: boolean;
+  /**
+   * an operation is running or queued in the main process, whoever started it; a window
+   * opened meanwhile (closing frees the old one) shows it busy from this
+   */
+  busy: boolean;
+  /** its latest step ("Downloading Pete Lowe (1 of 2)"), or "" */
+  step: string;
 }
 
 export interface SourceView {

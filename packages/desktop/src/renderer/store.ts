@@ -53,6 +53,9 @@ export function cleanError(err: unknown): string {
   return m.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, "");
 }
 
+/** store.busy was set by refresh() for an operation running in the main process, not by act() */
+let adopted = false;
+
 export async function refresh(): Promise<void> {
   try {
     const [info, status, sources, allowlist, settings, appUpdate] = await Promise.all([
@@ -64,6 +67,17 @@ export async function refresh(): Promise<void> {
       api.appUpdate(),
     ]);
     Object.assign(store, { info, status, sources, allowlist, settings, appUpdate });
+    // an operation this page did not start (the tray, the hotkey, or one a window closed
+    // meanwhile started): show it busy until the main process says it ended
+    if (info.busy && !store.busy) {
+      store.busy = "Working";
+      store.step = info.step;
+      adopted = true;
+    } else if (!info.busy && adopted) {
+      store.busy = "";
+      store.step = "";
+      adopted = false;
+    }
   } catch (err) {
     store.error = cleanError(err);
   }
@@ -71,6 +85,7 @@ export async function refresh(): Promise<void> {
 
 /** Run an action with the busy indicator; errors land in store.error, success can add a toast. */
 export async function act<T>(label: string, fn: () => Promise<T>, notice?: (r: T) => string): Promise<T | undefined> {
+  adopted = false;
   store.busy = label;
   store.step = "";
   store.error = "";

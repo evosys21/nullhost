@@ -127,7 +127,8 @@ async function anotherCopyStarted(data: unknown): Promise<void> {
       cancelId: can ? 1 : 0,
       noLink: true,
     };
-    const r = win ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
+    // a window rebuilt just now is not on screen yet: no parent rather than a hidden one
+    const r = win?.isVisible() ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
     if (!can || r.response !== 0) return;
     await runAsync("powershell", hiddenPowerShell(switchScript(process.pid, started)), { windowsHide: true, timeout: 30_000 });
     quitting = true;
@@ -137,8 +138,13 @@ async function anotherCopyStarted(data: unknown): Promise<void> {
   }
 }
 
+/** Bring the window up, building it again if closing to the tray freed it. */
 function showWindow(): void {
-  if (!win) return;
+  if (!win) {
+    createWindow(true);
+    void refreshTray(); // the new window's icon follows the blocking state
+    return;
+  }
   if (win.isMinimized()) win.restore();
   win.show();
   win.focus();
@@ -153,7 +159,12 @@ function applyTheme(theme: Theme): void {
   win?.setBackgroundColor(windowBackground());
 }
 
-function createWindow(): void {
+/**
+ * The window lives only while it is open. Closing it to the tray destroys it, which
+ * ends its renderer and frees most of NullHost's memory; the tray, the hotkey, the
+ * timers and the service stay in this process. `show`: show it once it has painted.
+ */
+function createWindow(show: boolean): void {
   win = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -174,14 +185,32 @@ function createWindow(): void {
   });
   win.setMenu(null);
   win.once("ready-to-show", () => {
-    if (!startHidden && !smokeDir) win?.show();
-  });
-  // Close hides to the tray; Quit is in the tray menu.
-  win.on("close", (e) => {
-    if (!quitting && !smokeDir) {
-      e.preventDefault();
-      win?.hide();
+    if (show && !smokeDir) {
+      win?.show();
+      win?.focus();
     }
+  });
+  // Close frees the window and NullHost stays in the tray (window-all-closed keeps the
+  // app running); Quit is in the tray menu. A view with unsaved edits holds the page
+  // (renderer/unsaved.ts): ask first, and on quitting drop them as before.
+  const self = win;
+  win.webContents.on("will-prevent-unload", (e) => {
+    if (quitting) {
+      e.preventDefault();
+      return;
+    }
+    const options = {
+      type: "question" as const,
+      title: "NullHost",
+      message: "Discard your unsaved changes?",
+      detail: "The hosts file or the allowlist has edits that are not saved. Closing the window discards them.",
+      buttons: ["Discard and close", "Keep editing"],
+      defaultId: 1,
+      cancelId: 1,
+      noLink: true,
+    };
+    const r = dialog.showMessageBoxSync(self, options);
+    if (r === 0) e.preventDefault(); // preventDefault on this event means: unload anyway
   });
   // 'closed' follows every destroy, so `win?.` is the one guard the rest of the file needs
   win.on("closed", () => { win = null; });
@@ -277,7 +306,7 @@ async function refreshTray(): Promise<void> {
 
 function createTray(): void {
   tray = new Tray(icon("enabled"));
-  tray.on("click", () => (win?.isVisible() ? win.hide() : showWindow()));
+  tray.on("click", () => (win?.isVisible() ? win.close() : showWindow()));
   void refreshTray();
 }
 
@@ -555,7 +584,8 @@ async function main(): Promise<void> {
   service = await createService();
   registerIpc();
   await service.applySavedTheme();
-  createWindow();
+  // started at login (--hidden): no window until the user opens one
+  if (!startHidden || smokeDir) createWindow(!startHidden);
   createTray();
   await service.registerSavedHotkey();
   service.onChange(() => {

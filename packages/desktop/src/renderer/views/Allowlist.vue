@@ -5,6 +5,7 @@ import type { CheckResult } from "../../shared/api";
 import Banners from "../components/Banners.vue";
 import Icon from "../components/Icon.vue";
 import { act, api, store } from "../store";
+import { holdWhileDirty } from "../unsaved";
 
 const canWrite = computed(() => store.info?.canWrite ?? false);
 const dirty = ref(false);
@@ -15,6 +16,7 @@ const result = ref<CheckResult | null>(null);
 const saved = computed(() => store.allowlist.join("\n"));
 const text = ref(saved.value);
 const edited = computed(() => text.value.trim() !== saved.value);
+holdWhileDirty("allowlist", edited);
 // follow changes made elsewhere (the Dashboard's "Allow this host") unless the user is editing
 watch(saved, (now, before) => {
   if (text.value.trim() === before) text.value = now;
