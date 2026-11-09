@@ -78,7 +78,7 @@ export function createMockApi(): NullhostApi {
     return { available: true, enabled: dnsOn, canSwitch: true, admin, ours: dnsUntil !== undefined, until: dnsUntil, overdue: dnsUntil !== undefined && Date.parse(dnsUntil) <= Date.now(), entries, last: record };
   };
   return {
-    info: async () => ({ version: "0.1.0", platform: "windows", hostsFile: "C:\\Windows\\System32\\drivers\\etc\\hosts", systemFile: true, elevated: false, writer: "helper", helperRunning: false, pauseEnded: false, canWrite: true, dataDir: "%LOCALAPPDATA%\\NullHost", configFile: "%APPDATA%\\NullHost\\config.toml", dev: true, portable: false }),
+    info: async () => ({ version: "0.1.0", platform: "windows", hostsFile: "C:\\Windows\\System32\\drivers\\etc\\hosts", systemFile: true, elevated: false, writer: "helper", helperRunning: false, pauseEnded: false, canWrite: true, dataDir: "%LOCALAPPDATA%\\NullHost", configFile: "%APPDATA%\\NullHost\\config.toml", dev: true, portable: false, busy: false, step: "" }),
     status: async () => status(),
     sources: async () => sources,
     setSource: async (id, on) => { sources = sources.map((s) => (s.id === id ? { ...s, enabled: on } : s)); return done(undefined); },

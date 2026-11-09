@@ -130,6 +130,9 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
   private hotkeyOk = false;
   private pauseEnded = false;
   private queue: Promise<unknown> = Promise.resolve();
+  /** write operations running or waiting in `queue`, and the latest step of the one running */
+  private running = 0;
+  private lastStep = "";
   private listeners = new Set<() => void>();
   private progressListeners = new Set<(step: string) => void>();
   private readonly desktopFile: string;
@@ -203,6 +206,7 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
   }
 
   private progress(step: string): void {
+    if (this.running > 0) this.lastStep = step;
     for (const cb of this.progressListeners) cb(step);
   }
 
@@ -221,9 +225,14 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
     if (!this.canWrite) {
       return Promise.reject(new Error("NullHost cannot change the system hosts file from here. Start it again, or as administrator."));
     }
+    this.running++;
     const run = this.queue.then(fn, fn);
     this.queue = run.catch(() => undefined);
-    return run.finally(() => this.changed());
+    return run.finally(() => {
+      // before changed(): the refresh it sets off must already read "not busy"
+      if (--this.running === 0) this.lastStep = "";
+      this.changed();
+    });
   }
 
   /** stop the helper (the app quits) */
@@ -251,6 +260,8 @@ export class Service implements Omit<NullhostApi, "onChanged" | "onProgress"> {
       configFile: this.engine.paths.configFile,
       dev: this.o.dev,
       portable: this.o.portable ?? false,
+      busy: this.running > 0,
+      step: this.lastStep,
     };
   }
 
