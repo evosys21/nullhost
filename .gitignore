@@ -14,6 +14,7 @@ out/
 # agent tooling and design notes: a separate private checkout in this same folder
 /.private.git/
 /AGENTS.md
+/CLAUDE.md
 /.agents/
 /.claude/
 /FINDINGS.md
